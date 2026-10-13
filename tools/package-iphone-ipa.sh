@@ -18,9 +18,9 @@ plist_value() {
 set_plist_value() {
     local plist="$1" key="$2" expected="$3" actual
     actual="$(plist_value "$plist" "$key")"
-    echo "$plist: $key before packaging = \${actual:-<missing>}"
+    echo "$plist: $key before packaging = ${actual:-<missing>}"
     if [[ "$actual" != "$expected" ]]; then
-        echo "::warning::Correcting generated $key from '\${actual:-<missing>}' to '$expected'"
+        echo "::warning::Correcting generated $key from '${actual:-<missing>}' to '$expected'"
         if [[ -n "$actual" ]]; then
             /usr/libexec/PlistBuddy -c "Set :$key $expected" "$plist"
         else
