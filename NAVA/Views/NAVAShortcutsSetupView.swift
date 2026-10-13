@@ -2,6 +2,10 @@ import AppIntents
 import SwiftUI
 import UIKit
 
+enum NAVAShortcutsSetup {
+    static let pendingVoiceTestKey = "nava.shortcuts.pendingVoiceTest"
+}
+
 /// App Shortcuts are published by NAVAShortcuts automatically at installation.
 /// Personal automations, hardware buttons and Siri settings still require
 /// the iPhone owner's permission in iOS.
@@ -53,8 +57,10 @@ struct NAVAShortcutsSetupView: View {
 
                     Button {
                         NAVAShortcuts.updateAppShortcutParameters()
+                        // Wait until this sheet is fully dismissed before
+                        // presenting NAVA Voice from the parent view.
+                        UserDefaults.standard.set(true, forKey: NAVAShortcutsSetup.pendingVoiceTestKey)
                         dismiss()
-                        voiceRouter.open(listen: autoListen)
                     } label: {
                         Label("تست Talk to NAVA همین حالا", systemImage: "play.fill")
                             .frame(maxWidth: .infinity)
