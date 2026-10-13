@@ -41,6 +41,7 @@ struct VoiceView: View {
     @State private var cloudFallbackMemo: NAVAVoiceMemo?
     @State private var isDismissing = false
     @State private var continuousSession = false
+    @State private var conversationRevision = 0
     @State private var isCompletingTurn = false
     @State private var waitingForAudioToFinish = false
     @State private var heardSpeech = false
@@ -558,6 +559,7 @@ struct VoiceView: View {
     }
 
     private func stopContinuousSession() {
+        conversationRevision += 1
         continuousSession = false
         waitingForAudioToFinish = false
         isCompletingTurn = false
@@ -577,8 +579,9 @@ struct VoiceView: View {
             await resumeHandsFreeListening()
             return
         }
-        await processPersianRecording(memo)
-        guard continuousSession, !isDismissing else { return }
+        let revision = conversationRevision
+        await processPersianRecording(memo, expectedRevision: revision)
+        guard conversationRevision == revision, continuousSession, !isDismissing else { return }
         if persianTTS.isPlaying {
             waitingForAudioToFinish = true
             await activity.updateStatus("در حال پاسخ", phase: .responding)
@@ -594,7 +597,7 @@ struct VoiceView: View {
         await startPersianVoiceCapture()
     }
 
-    private func processPersianRecording(_ memo: NAVAVoiceMemo) async {
+    private func processPersianRecording(_ memo: NAVAVoiceMemo, expectedRevision: Int? = nil) async {
         guard !isHandling else { return }
         isHandling = true
         responsePhase = "در حال تشخیص فارسی روی آیفون…"
@@ -608,10 +611,11 @@ struct VoiceView: View {
                 file: memos.url(for: memo),
                 model: offlineModel
             )
+            if let expectedRevision, expectedRevision != conversationRevision { return }
             memos.updateTranscript(id: memo.id, text: text)
             lastHeardText = text
             cloudFallbackMemo = nil
-            await processText(text)
+            await processText(text, expectedRevision: expectedRevision)
         } catch {
             feedback = "تشخیص آفلاین انجام نشد: \(error.localizedDescription)"
             if transcription.configured { cloudFallbackMemo = memo }
@@ -662,7 +666,8 @@ struct VoiceView: View {
         }
     }
 
-    private func processText(_ text: String) async {
+    private func processText(_ text: String, expectedRevision: Int? = nil) async {
+        if let expectedRevision, expectedRevision != conversationRevision { return }
         lastHeardText = text
         responsePhase = "در حال بررسی فرمان…"
         await activity.updateStatus("در حال پاسخ")
@@ -673,6 +678,7 @@ struct VoiceView: View {
         } else {
             response = await chat.send(text, store: store)
         }
+        if let expectedRevision, expectedRevision != conversationRevision { return }
         feedback = "نوا: \(response)"
         if autoSpeak {
             responsePhase = "در حال ساخت و پخش صدای فارسی…"
