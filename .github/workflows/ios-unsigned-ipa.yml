@@ -63,8 +63,8 @@ jobs:
           test -d "$APP"
           test -f "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -qx '4.2.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -qx '42'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -qx '4.3.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -qx '43'
           for track in EmberRain StillSpace NightDrive; do
             find "$APP" -name "$track.wav" -print -quit | grep -q . || { echo "Missing playable Focus track: $track"; exit 1; }
           done
