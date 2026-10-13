@@ -37,6 +37,8 @@ struct SaveNAVANoteIntent: AppIntent {
 }
 
 struct NAVAShortcuts: AppShortcutsProvider {
+    static var shortcutTileColor: ShortcutTileColor { .orange }
+
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: OpenNAVAIntent(),
@@ -49,7 +51,9 @@ struct NAVAShortcuts: AppShortcutsProvider {
             phrases: [
                 "Talk to \(.applicationName)",
                 "Open \(.applicationName) voice",
-                "Start \(.applicationName)"
+                "Start \(.applicationName)",
+                "Listen with \(.applicationName)",
+                "Ask \(.applicationName)"
             ],
             shortTitle: "Talk to NAVA",
             systemImageName: "waveform"
