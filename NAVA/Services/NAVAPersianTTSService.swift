@@ -14,6 +14,7 @@ final class NAVAPersianTTSService: ObservableObject {
 
     private var player: AVAudioPlayer?
     private var playCompletion: Timer?
+    private var playbackGeneration = UUID()
     private var currentAudioURL: URL?
 
     var isModelBundled: Bool { Self.resourcesDirectory() != nil }
@@ -36,6 +37,7 @@ final class NAVAPersianTTSService: ObservableObject {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return false }
         stop()
+        let turnGeneration = playbackGeneration
         errorMessage = nil
         isSynthesizing = true
 
@@ -44,6 +46,10 @@ final class NAVAPersianTTSService: ObservableObject {
             let wav = try await Task.detached(priority: .userInitiated) {
                 try Self.renderWAV(text: phrase, directory: directory)
             }.value
+            guard turnGeneration == playbackGeneration else {
+                try? FileManager.default.removeItem(at: wav)
+                return false
+            }
             isSynthesizing = false
 
             let session = AVAudioSession.sharedInstance()
@@ -74,6 +80,8 @@ final class NAVAPersianTTSService: ObservableObject {
     }
 
     func stop() {
+        playbackGeneration = UUID()
+        isSynthesizing = false
         playCompletion?.invalidate()
         playCompletion = nil
         player?.stop()
