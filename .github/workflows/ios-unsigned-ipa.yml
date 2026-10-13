@@ -64,8 +64,8 @@ jobs:
           test -d "$APP"
           test -f "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -qx '4.4.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -qx '44'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -qx '4.5.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -qx '45'
           for track in EmberRain StillSpace NightDrive; do
             find "$APP" -name "$track.wav" -print -quit | grep -q . || { echo "Missing playable Focus track: $track"; exit 1; }
           done
@@ -76,8 +76,8 @@ jobs:
           EXT="$APP/PlugIns/NAVAWidgetExtension.appex"
           test -d "$EXT" || { echo "Missing Dynamic Island widget extension"; exit 1; }
           test -f "$EXT/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$EXT/Info.plist" | grep -qx '4.4.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$EXT/Info.plist" | grep -qx '44'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$EXT/Info.plist" | grep -qx '4.5.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$EXT/Info.plist" | grep -qx '45'
           /usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist" | grep -qx true
           /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXT/Info.plist" | grep -qx 'com.apple.widgetkit-extension'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$APP/Info.plist" | grep -qx nava

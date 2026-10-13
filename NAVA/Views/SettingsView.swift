@@ -18,6 +18,9 @@ struct SettingsView: View {
     @AppStorage("nava.voiceShortcutName") private var voiceShortcutName = ""
     @AppStorage("nava.voiceAutoSpeak") private var autoSpeak = true
     @AppStorage("nava.shortcutAutoListen") private var shortcutAutoListen = true
+    @AppStorage("nava.voiceContinuous") private var continuousVoice = true
+    @AppStorage("nava.voiceAutoStartOnOpen") private var autoStartOnOpen = true
+    @AppStorage("nava.voiceSensitivity") private var voiceSensitivity = 0.16
     @State private var showBackup = false
     @State private var showShortcutSetup = false
     @State private var showDeleteMemos = false
@@ -36,7 +39,7 @@ struct SettingsView: View {
                             Text("NAVA")
                                 .font(.system(size: 20, weight: .ultraLight))
                                 .tracking(5)
-                            Text("Personal OS · نسخه ۴.۴")
+                            Text("Personal OS · نسخه ۴.۵")
                                 .font(NAVATheme.type(12))
                                 .foregroundStyle(NAVATheme.sand)
                         }
@@ -170,6 +173,25 @@ struct SettingsView: View {
                           systemImage: "text.bubble")
                         .font(NAVATheme.type(12))
                     Toggle("نوا پاسخ‌ها را با صدای فارسی بخواند", isOn: $autoSpeak)
+                    Toggle("مکالمه بدون نیاز به ارسال دستی", isOn: $continuousVoice)
+                    Toggle("شروع مکالمه با بازکردن صفحه Voice", isOn: $autoStartOnOpen)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("حساسیت تشخیص پایان صحبت")
+                            Spacer()
+                            Text(voiceSensitivity <= 0.13 ? "زیاد" : voiceSensitivity >= 0.22 ? "کم" : "عادی")
+                                .foregroundStyle(NAVATheme.sand)
+                        }
+                        Slider(value: $voiceSensitivity, in: 0.10...0.25, step: 0.01)
+                            .tint(NAVATheme.orange)
+                        Text("برای شناسایی صدای آرام، حساسیت رو بیشتر (آستانه کمتر) کن. برای جلوگیری از تشخیص صدای محیط، حساسیت رو کمتر (آستانه بیشتر) کن.")
+                            .font(NAVATheme.type(11))
+                            .foregroundStyle(NAVATheme.muted)
+                    }
+                    .font(NAVATheme.type(12))
+                    Text("فقط در صفحه باز Voice گوش می‌ده: بعد از حدود ۱٫۵ ثانیه مکث، متن فارسی رو تشخیص می‌ده، با Piper جواب می‌ده و دوباره گوش می‌ده. این مکالمه خودکار نوبتیه، نه Voice API یا بیدارباش دائمی.")
+                        .font(NAVATheme.type(12))
+                        .foregroundStyle(NAVATheme.muted)
                     Label(
                         persianTTS.isModelBundled ? "Piper فارسی روی آیفون نصب شده" : "مدل Piper فارسی در بسته نصب پیدا نشد",
                         systemImage: persianTTS.isModelBundled ? "checkmark.seal" : "exclamationmark.triangle"
@@ -284,6 +306,22 @@ struct SettingsView: View {
                     Text(activity.diagnostic)
                         .font(.system(size: 12, design: .monospaced))
                     Button("بررسی مجدد Live Activity") { activity.refreshDiagnostics() }
+                    Button {
+                        Task {
+                            await activity.start(status: "نوا آماده گفتگو", phase: .ready)
+                            activity.refreshDiagnostics()
+                        }
+                    } label: {
+                        Label("روشن‌کردن Dynamic Island برای تست", systemImage: "capsule")
+                    }
+                    Button {
+                        Task { await activity.stop() }
+                    } label: {
+                        Label("پایان Live Activity نوا", systemImage: "xmark.circle")
+                    }
+                    Text("اگر Activity count روی صفره، یعنی فعالیت فعالی وجود نداره. اول روی روشن‌کردن Island بزن و سپس از صفحه خارج شو. iOS ممکنه جزیره رو وقتی صفحه اپ بازه نمایش نده؛ روی لاک‌اسکرین هم بررسی کن.")
+                        .font(NAVATheme.type(12))
+                        .foregroundStyle(NAVATheme.muted)
                     if let error = activity.errorMessage {
                         Text(error).foregroundStyle(NAVATheme.sand)
                     }
