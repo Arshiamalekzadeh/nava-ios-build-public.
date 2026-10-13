@@ -24,7 +24,7 @@ permissions:
 jobs:
   build-iphone:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,7 +88,7 @@ jobs:
         with:
           name: NAVA-unsigned-iPhone-IPA
           path: NAVA-unsigned-iPhone.ipa
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error
       - name: Upload diagnostics on failure
         if: failure()
