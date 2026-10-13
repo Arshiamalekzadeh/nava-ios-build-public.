@@ -38,6 +38,7 @@ jobs:
           brew install xcodegen
           swift tools/generate-icon.swift
           swift tools/generate-soundpack.swift
+          bash tools/prepare-persian-tts.sh
           xcodegen generate
           xcodebuild -resolvePackageDependencies -project NAVA.xcodeproj -scheme NAVA
       - name: Build iPhone app (unsigned)
@@ -63,16 +64,20 @@ jobs:
           test -d "$APP"
           test -f "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -qx '4.3.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -qx '43'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -qx '4.4.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -qx '44'
           for track in EmberRain StillSpace NightDrive; do
             find "$APP" -name "$track.wav" -print -quit | grep -q . || { echo "Missing playable Focus track: $track"; exit 1; }
           done
+          MODEL_DIR="$APP/PersianTTS"
+          test -s "$MODEL_DIR/fa_IR-gyro-medium.onnx" || { echo "Persian TTS weights missing from IPA"; exit 1; }
+          test -s "$MODEL_DIR/tokens.txt"
+          test -d "$MODEL_DIR/espeak-ng-data"
           EXT="$APP/PlugIns/NAVAWidgetExtension.appex"
           test -d "$EXT" || { echo "Missing Dynamic Island widget extension"; exit 1; }
           test -f "$EXT/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$EXT/Info.plist" | grep -qx '4.3.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$EXT/Info.plist" | grep -qx '43'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$EXT/Info.plist" | grep -qx '44'
           /usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist" | grep -qx true
           /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXT/Info.plist" | grep -qx 'com.apple.widgetkit-extension'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$APP/Info.plist" | grep -qx nava
