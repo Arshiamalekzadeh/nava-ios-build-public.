@@ -12,6 +12,7 @@ struct SettingsView: View {
     @EnvironmentObject private var voiceMemos: NAVAVoiceMemoStore
     @EnvironmentObject private var transcription: NAVATranscriptionService
     @EnvironmentObject private var offlineSpeech: NAVAOfflineSpeechService
+    @EnvironmentObject private var persianTTS: NAVAPersianTTSService
     @EnvironmentObject private var voiceRouter: NAVAVoiceRouter
     @AppStorage("nava.voiceOfflineModel") private var offlineModel = "base"
     @AppStorage("nava.voiceShortcutName") private var voiceShortcutName = ""
@@ -35,7 +36,7 @@ struct SettingsView: View {
                             Text("NAVA")
                                 .font(.system(size: 20, weight: .ultraLight))
                                 .tracking(5)
-                            Text("Personal OS · نسخه ۴.۳")
+                            Text("Personal OS · نسخه ۴.۴")
                                 .font(NAVATheme.type(12))
                                 .foregroundStyle(NAVATheme.sand)
                         }
@@ -168,20 +169,35 @@ struct SettingsView: View {
                     Label("موتور فارسی اپل: \(SFSpeechRecognizer(locale: Locale(identifier: "fa-IR"))?.isAvailable == true ? "در دسترس" : "در دسترس نیست")",
                           systemImage: "text.bubble")
                         .font(NAVATheme.type(12))
-                    Toggle("خواندن پاسخ با صدای دستگاه", isOn: $autoSpeak)
+                    Toggle("نوا پاسخ‌ها را با صدای فارسی بخواند", isOn: $autoSpeak)
                     Label(
-                        AVSpeechSynthesisVoice.speechVoices().contains(where: {
-                            $0.language.lowercased().hasPrefix("fa")
-                        }) ? "صدای فارسی خروجی روی آیفون وجود دارد" : "صدای فارسی خروجی در iOS این دستگاه موجود نیست",
-                        systemImage: "speaker.wave.2"
+                        persianTTS.isModelBundled ? "Piper فارسی روی آیفون نصب شده" : "مدل Piper فارسی در بسته نصب پیدا نشد",
+                        systemImage: persianTTS.isModelBundled ? "checkmark.seal" : "exclamationmark.triangle"
                     )
-                    .font(NAVATheme.type(12))
-                    .foregroundStyle(NAVATheme.sand)
-                    Text("Whisper صدای تو رو می‌فهمه و متن فارسی تولید می‌کنه؛ ولی خواندن بلند پاسخ، موتور گفتار جداگانه لازم داره. اگر صدای فارسی سیستم موجود نباشه، نوا پاسخ رو متنی نمایش می‌ده. Plus شامل Voice API مستقل نیست.")
+                    .font(NAVATheme.type(13))
+                    .foregroundStyle(persianTTS.isModelBundled ? NAVATheme.sand : .orange)
+                    Text("این موتور گفتار فارسی کاملاً مستقل از صدای Siri و Apple Speech است. مدل Piper و داده‌های تلفظ با خود برنامه نصب می‌شن، به اینترنت یا API Key نیاز نداره و حتی در حالت Silent قابل پخشه.")
                         .font(NAVATheme.type(12))
                         .foregroundStyle(NAVATheme.muted)
-                        .font(NAVATheme.type(12))
-                        .foregroundStyle(NAVATheme.muted)
+                    Button {
+                        Task {
+                            _ = await persianTTS.speak("سلام! من نوا هستم و می‌تونم باهات فارسی صحبت کنم.")
+                        }
+                    } label: {
+                        Label(
+                            persianTTS.isSynthesizing ? "در حال ساخت صدای فارسی..." : "تست صدای فارسی مستقل",
+                            systemImage: "speaker.wave.2.fill"
+                        )
+                    }
+                    .disabled(!persianTTS.isModelBundled || persianTTS.isSynthesizing)
+                    if persianTTS.isPlaying {
+                        Button("توقف پخش") { persianTTS.stop() }
+                    }
+                    if let error = persianTTS.errorMessage {
+                        Text(error)
+                            .font(NAVATheme.type(12))
+                            .foregroundStyle(NAVATheme.sand)
+                    }
                     Button("بازکردن تنظیمات دسترسی NAVA") {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
                             UIApplication.shared.open(url)
