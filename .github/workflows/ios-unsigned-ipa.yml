@@ -71,6 +71,8 @@ jobs:
           EXT="$APP/PlugIns/NAVAWidgetExtension.appex"
           test -d "$EXT" || { echo "Missing Dynamic Island widget extension"; exit 1; }
           test -f "$EXT/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$EXT/Info.plist" | grep -qx '4.3.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$EXT/Info.plist" | grep -qx '43'
           /usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist" | grep -qx true
           /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXT/Info.plist" | grep -qx 'com.apple.widgetkit-extension'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$APP/Info.plist" | grep -qx nava
