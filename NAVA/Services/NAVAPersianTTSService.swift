@@ -3,7 +3,7 @@ import Combine
 import Foundation
 import SherpaOnnx
 
-/// Local Farsi text-to-speech using the MIT-licensed Piper Persian Gyro voice,
+/// Local Farsi text-to-speech using the publicly released Piper Persian Gyro voice,
 /// bundled with the official sherpa-onnx VITS runtime and eSpeak data.
 /// No OpenAI API, network, iOS "fa-IR" voice or uploaded speech required.
 @MainActor
