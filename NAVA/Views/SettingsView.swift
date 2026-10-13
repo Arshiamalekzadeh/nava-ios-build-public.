@@ -287,7 +287,13 @@ struct SettingsView: View {
             .navigationTitle("تنظیمات")
             .tint(NAVATheme.orange)
             .onAppear { activity.refreshDiagnostics() }
-            .sheet(isPresented: $showShortcutSetup) {
+            .sheet(isPresented: $showShortcutSetup, onDismiss: {
+                let key = NAVAShortcutsSetup.pendingVoiceTestKey
+                if UserDefaults.standard.bool(forKey: key) {
+                    UserDefaults.standard.removeObject(forKey: key)
+                    voiceRouter.open(listen: UserDefaults.standard.object(forKey: "nava.shortcutAutoListen") as? Bool ?? true)
+                }
+            }) {
                 NAVAShortcutsSetupView()
                     .environmentObject(voiceRouter)
                     .environment(\.layoutDirection, .rightToLeft)
