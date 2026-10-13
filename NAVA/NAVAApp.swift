@@ -13,6 +13,7 @@ struct NAVAApp: App {
     @StateObject private var focus = NAVAFocusStore()
     @StateObject private var transcription = NAVATranscriptionService()
     @StateObject private var offlineSpeech = NAVAOfflineSpeechService()
+    @StateObject private var persianTTS = NAVAPersianTTSService()
 
     var body: some Scene {
         WindowGroup {
@@ -26,6 +27,7 @@ struct NAVAApp: App {
                 .environmentObject(focus)
                 .environmentObject(transcription)
                 .environmentObject(offlineSpeech)
+                .environmentObject(persianTTS)
                 .environment(\.layoutDirection, .rightToLeft)
                 .preferredColorScheme(.dark)
                 .onAppear {
@@ -52,6 +54,7 @@ struct NAVAApp: App {
                         .environmentObject(focus)
                         .environmentObject(transcription)
                         .environmentObject(offlineSpeech)
+                        .environmentObject(persianTTS)
                         .environment(\.layoutDirection, .rightToLeft)
                 }
                 .sheet(item: $chatGPT.browser, onDismiss: {
