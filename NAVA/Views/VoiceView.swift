@@ -23,10 +23,11 @@ struct VoiceView: View {
     @AppStorage("nava.voiceShortcutName") private var shortcutName = ""
     @AppStorage("nava.shortcutAutoListen") private var shortcutAutoListen = true
     @AppStorage("nava.voiceContinuous") private var continuousVoice = true
+    @AppStorage("nava.voiceAutoStartOnOpen") private var autoStartOnOpen = true
     @AppStorage("nava.voiceSensitivity") private var voiceSensitivity = 0.16
 
     @StateObject private var speech = LocalSpeechService()
-    @State private var mode: NAVAVoiceMode = .record
+    @State private var mode: NAVAVoiceMode = .recognize
     @State private var isHandling = false
     @State private var isStartingCapture = false
     @State private var lastExecuted = ""
@@ -201,8 +202,14 @@ struct VoiceView: View {
             focus.stopSound()
             await activity.start(status: "آماده گفتگو", phase: .ready)
             await activity.updateStatus("آماده گفتگو", phase: .ready)
-            if voiceRouter.consumeAutoListen() && shortcutAutoListen {
-                mode = .recognize
+            if voiceRouter.consumeAutoListen() {
+                if shortcutAutoListen {
+                    mode = .recognize
+                    await launchVoiceFromShortcut()
+                }
+            } else if autoStartOnOpen {
+                // Entering the dedicated Voice screen is a foreground,
+                // user-initiated action. No background wake-word listener.
                 await launchVoiceFromShortcut()
             }
         }
