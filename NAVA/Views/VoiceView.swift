@@ -19,12 +19,16 @@ struct VoiceView: View {
     @EnvironmentObject private var transcription: NAVATranscriptionService
     @AppStorage("nava.voiceOfflineModel") private var offlineModel = "base"
     @AppStorage("nava.voiceShortcutName") private var shortcutName = ""
+    @AppStorage("nava.shortcutAutoListen") private var shortcutAutoListen = true
 
     @StateObject private var speech = LocalSpeechService()
     @State private var mode: NAVAVoiceMode = .record
     @State private var isHandling = false
     @State private var lastExecuted = ""
     @State private var feedback = ""
+    @State private var lastHeardText = ""
+    @State private var responsePhase = ""
+    @State private var showVoiceHelp = false
     @State private var typedCommand = ""
     @State private var showArchive = false
     @State private var showModelDownloadConsent = false
@@ -36,7 +40,7 @@ struct VoiceView: View {
     private var statusText: String {
         if memos.isRecording { return "در حال ضبط صدای تو" }
         if offlineSpeech.isPreparing || offlineSpeech.isTranscribing { return offlineSpeech.phase }
-        if isHandling { return "نوا در حال پاسخ است…" }
+        if isHandling { return responsePhase.isEmpty ? "نوا در حال پاسخ است…" : responsePhase }
         return "نوا آماده است"
     }
 
@@ -93,8 +97,8 @@ struct VoiceView: View {
                             .foregroundStyle(NAVATheme.sand)
                         }
 
-                        if !speech.transcript.isEmpty {
-                            messagePanel(speech.transcript, icon: "waveform")
+                        if !lastHeardText.isEmpty {
+                            messagePanel("شنیدم: «\(lastHeardText)»", icon: "text.bubble")
                         }
                         if !feedback.isEmpty {
                             messagePanel(feedback, icon: "sparkle")
@@ -132,7 +136,9 @@ struct VoiceView: View {
                         }
 
                         Button {
-                            speech.speak("سلام، من نوا هستم.")
+                            if !speech.speak("سلام، من نوا هستم.") {
+                                showVoiceHelp = true
+                            }
                         } label: {
                             Label("تست صدای نوا", systemImage: "speaker.wave.2")
                                 .font(NAVATheme.type(12))
@@ -177,6 +183,16 @@ struct VoiceView: View {
             focus.stopSound()
             await activity.start(status: "آماده گفتگو", phase: .ready)
             await activity.updateStatus("آماده گفتگو", phase: .ready)
+            if voiceRouter.consumeAutoListen() && shortcutAutoListen {
+                mode = .recognize
+                await launchVoiceFromShortcut()
+            }
+        }
+        .onChange(of: voiceRouter.autoListenRequested) { _, requested in
+            if requested, shortcutAutoListen, voiceRouter.consumeAutoListen() {
+                mode = .recognize
+                Task { await launchVoiceFromShortcut() }
+            }
         }
         .onChange(of: voiceRouter.requestedAction) { _, action in
             if action == "close" {
@@ -193,6 +209,16 @@ struct VoiceView: View {
             speech.stop()
             if memos.isRecording { _ = memos.stop() }
             Task { await activity.updateStatus("آماده گفتگو") }
+        }
+        .alert("صدای فارسی خروجی در iOS پیدا نشد", isPresented: $showVoiceHelp) {
+            Button("تنظیمات NAVA") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("باشه", role: .cancel) {}
+        } message: {
+            Text("Whisper صدای تو رو به متن تبدیل می‌کنه، ولی پخش پاسخ با صدای فارسی به یک موتور گفتار جدا نیاز داره. iOS در این دستگاه فعلاً صدای فارسی در اختیار برنامه قرار نمی‌ده؛ متن پاسخ همیشه قابل‌مشاهده است.")
         }
         .confirmationDialog("دانلود موتور فارسی آفلاین", isPresented: $showModelDownloadConsent) {
             Button("دانلود مدل و شروع ضبط") {
@@ -246,6 +272,26 @@ struct VoiceView: View {
 
     private var controlPanel: some View {
         VStack(spacing: 13) {
+            if !lastHeardText.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(NAVATheme.orange)
+                    Text("شنیدم: \(lastHeardText)")
+                        .font(NAVATheme.type(12, weight: .medium))
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+            }
+            if isHandling {
+                HStack(spacing: 9) {
+                    ProgressView().tint(NAVATheme.orange)
+                    Text(responsePhase)
+                        .font(NAVATheme.type(12))
+                        .foregroundStyle(NAVATheme.sand)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+            }
             Picker("حالت نوا", selection: $mode) {
                 ForEach(NAVAVoiceMode.allCases, id: \.self) { item in
                     Text(item.rawValue).tag(item)
@@ -329,6 +375,16 @@ struct VoiceView: View {
         dismiss()
     }
 
+    private func launchVoiceFromShortcut() async {
+        if memos.isRecording { return }
+        if offlineSpeech.wasPrepared(offlineModel) {
+            await startPersianVoiceCapture()
+        } else {
+            // The user must approve the first model download explicitly.
+            showModelDownloadConsent = true
+        }
+    }
+
     private func microphoneTapped() async {
         guard !isHandling else { return }
         if memos.isRecording {
@@ -346,6 +402,8 @@ struct VoiceView: View {
         }
 
         feedback = ""
+        lastHeardText = ""
+        responsePhase = ""
         cloudFallbackMemo = nil
         if mode == .record {
             do {
@@ -379,7 +437,11 @@ struct VoiceView: View {
     private func processPersianRecording(_ memo: NAVAVoiceMemo) async {
         guard !isHandling else { return }
         isHandling = true
-        defer { isHandling = false }
+        responsePhase = "در حال تشخیص فارسی روی آیفون…"
+        defer {
+            isHandling = false
+            responsePhase = ""
+        }
         await activity.updateStatus("در حال تشخیص فارسی")
         do {
             let text = try await offlineSpeech.transcribe(
@@ -387,6 +449,7 @@ struct VoiceView: View {
                 model: offlineModel
             )
             memos.updateTranscript(id: memo.id, text: text)
+            lastHeardText = text
             cloudFallbackMemo = nil
             await processText(text)
         } catch {
@@ -399,12 +462,17 @@ struct VoiceView: View {
     private func transcribeUsingOnlineFallback(_ memo: NAVAVoiceMemo) async {
         guard !isHandling else { return }
         isHandling = true
-        defer { isHandling = false }
+        responsePhase = "در حال دریافت متن از سرویس انتخابی…"
+        defer {
+            isHandling = false
+            responsePhase = ""
+        }
         await activity.updateStatus("در حال تبدیل صدا")
         do {
             // Never automatically upload recorded audio.
             let text = try await transcription.transcribe(file: memos.url(for: memo))
             memos.updateTranscript(id: memo.id, text: text)
+            lastHeardText = text
             cloudFallbackMemo = nil
             await processText(text)
         } catch {
@@ -424,22 +492,33 @@ struct VoiceView: View {
     private func executeCommand(_ text: String) {
         guard !isHandling else { return }
         isHandling = true
+        lastHeardText = text
         Task {
+            defer {
+                isHandling = false
+                responsePhase = ""
+            }
             await processText(text)
-            isHandling = false
         }
     }
 
     private func processText(_ text: String) async {
+        lastHeardText = text
+        responsePhase = "در حال بررسی فرمان…"
         await activity.updateStatus("در حال پاسخ")
         let response: String
         if case .unknown = NAVACommandParser.parse(text), chatGPT.canUsePlan {
+            responsePhase = "در حال دریافت پاسخ هوشمند…"
             response = await chat.sendAI(text, auth: chatGPT)
         } else {
             response = await chat.send(text, store: store)
         }
-        feedback = "شنیدم: «\(text)»\n\nنوا: \(response)"
-        speech.speak(response)
-        await activity.updateStatus("آماده گفتگو")
+        feedback = "نوا: \(response)"
+        if !speech.speak(response) {
+            // A missing system fa-IR TTS voice must never conceal the reply.
+            // The response remains prominently readable in the UI.
+        }
+        responsePhase = ""
+        await activity.updateStatus("آماده گفتگو", phase: .ready)
     }
 }
