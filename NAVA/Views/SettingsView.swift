@@ -1,6 +1,8 @@
 import SwiftUI
 import UIKit
 import Speech
+import AVFoundation
+import AppIntents
 
 struct SettingsView: View {
     @EnvironmentObject private var store: NAVAStore
@@ -10,10 +12,13 @@ struct SettingsView: View {
     @EnvironmentObject private var voiceMemos: NAVAVoiceMemoStore
     @EnvironmentObject private var transcription: NAVATranscriptionService
     @EnvironmentObject private var offlineSpeech: NAVAOfflineSpeechService
+    @EnvironmentObject private var voiceRouter: NAVAVoiceRouter
     @AppStorage("nava.voiceOfflineModel") private var offlineModel = "base"
     @AppStorage("nava.voiceShortcutName") private var voiceShortcutName = ""
     @AppStorage("nava.voiceAutoSpeak") private var autoSpeak = true
+    @AppStorage("nava.shortcutAutoListen") private var shortcutAutoListen = true
     @State private var showBackup = false
+    @State private var showShortcutSetup = false
     @State private var showDeleteMemos = false
     @State private var transcriptionMessage = ""
     @State private var offlineModelMessage = ""
@@ -30,7 +35,7 @@ struct SettingsView: View {
                             Text("NAVA")
                                 .font(.system(size: 20, weight: .ultraLight))
                                 .tracking(5)
-                            Text("Personal OS · نسخه ۴.۰")
+                            Text("Personal OS · نسخه ۴.۳")
                                 .font(NAVATheme.type(12))
                                 .foregroundStyle(NAVATheme.sand)
                         }
@@ -164,7 +169,17 @@ struct SettingsView: View {
                           systemImage: "text.bubble")
                         .font(NAVATheme.type(12))
                     Toggle("خواندن پاسخ با صدای دستگاه", isOn: $autoSpeak)
-                    Text("فرمان گفتاری NAVA حالا از Whisper آفلاین استفاده می‌کنه، نه Speech اپل. خروجی صوتی هنوز به نصب صدای فارسی روی iOS وابسته است و ChatGPT Plus به‌تنهایی Voice API نمی‌ده.")
+                    Label(
+                        AVSpeechSynthesisVoice.speechVoices().contains(where: {
+                            $0.language.lowercased().hasPrefix("fa")
+                        }) ? "صدای فارسی خروجی روی آیفون وجود دارد" : "صدای فارسی خروجی در iOS این دستگاه موجود نیست",
+                        systemImage: "speaker.wave.2"
+                    )
+                    .font(NAVATheme.type(12))
+                    .foregroundStyle(NAVATheme.sand)
+                    Text("Whisper صدای تو رو می‌فهمه و متن فارسی تولید می‌کنه؛ ولی خواندن بلند پاسخ، موتور گفتار جداگانه لازم داره. اگر صدای فارسی سیستم موجود نباشه، نوا پاسخ رو متنی نمایش می‌ده. Plus شامل Voice API مستقل نیست.")
+                        .font(NAVATheme.type(12))
+                        .foregroundStyle(NAVATheme.muted)
                         .font(NAVATheme.type(12))
                         .foregroundStyle(NAVATheme.muted)
                     Button("بازکردن تنظیمات دسترسی NAVA") {
@@ -222,17 +237,20 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("فراخوانی با Siri") {
-                    Label("اکشن Talk to NAVA در Shortcuts", systemImage: "waveform")
-                    Text("می‌تونی از «Siri, talk to NAVA» استفاده کنی یا اکشن Talk to NAVA رو به Action Button و Back Tap وصل کنی. جایگزین موتور سیستمی Siri نمی‌شه.")
+                Section("فراخوانی با Siri و Shortcuts") {
+                    Label("اکشن Talk to NAVA به‌طور خودکار ثبت می‌شه", systemImage: "checkmark.circle")
+                        .foregroundStyle(NAVATheme.sand)
+                    Toggle("شروع شنیدن فارسی بعد از اجرای میان‌بر", isOn: $shortcutAutoListen)
+                    Button {
+                        NAVAShortcuts.updateAppShortcutParameters()
+                        showShortcutSetup = true
+                    } label: {
+                        Label("راه‌اندازی و تست سریع Siri / Shortcuts", systemImage: "waveform.circle")
+                            .font(NAVATheme.type(14, weight: .semibold))
+                    }
+                    Text("پس از نصب و یک‌بار بازکردن NAVA، اکشن Talk to NAVA در Shortcuts منتشر می‌شه. برای Action Button یا Back Tap باید خودت در تنظیمات iOS اون اکشن رو انتخاب کنی.")
                         .font(NAVATheme.type(12))
                         .foregroundStyle(NAVATheme.muted)
-                    Button("باز کردن Shortcuts") {
-                        NAVAShortcuts.updateAppShortcutParameters()
-                        if let url = URL(string: "shortcuts://") {
-                            UIApplication.shared.open(url)
-                        }
-                    }
                 }
 
                 Section("حریم خصوصی") {
@@ -269,6 +287,11 @@ struct SettingsView: View {
             .navigationTitle("تنظیمات")
             .tint(NAVATheme.orange)
             .onAppear { activity.refreshDiagnostics() }
+            .sheet(isPresented: $showShortcutSetup) {
+                NAVAShortcutsSetupView()
+                    .environmentObject(voiceRouter)
+                    .environment(\.layoutDirection, .rightToLeft)
+            }
             .sheet(isPresented: $showBackup) {
                 NAVABackupView()
                     .environmentObject(store)
