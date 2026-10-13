@@ -9,8 +9,8 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
-    MARKETING_VERSION: "4.2.0"
-    CURRENT_PROJECT_VERSION: "42"
+    MARKETING_VERSION: "4.3.0"
+    CURRENT_PROJECT_VERSION: "43"
 targets:
   NAVA:
     type: application
@@ -22,8 +22,8 @@ targets:
       path: NAVA/Info.plist
       properties:
         CFBundleDisplayName: NAVA
-        CFBundleShortVersionString: "4.2.0"
-        CFBundleVersion: "42"
+        CFBundleShortVersionString: "4.3.0"
+        CFBundleVersion: "43"
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
         UIBackgroundModes:

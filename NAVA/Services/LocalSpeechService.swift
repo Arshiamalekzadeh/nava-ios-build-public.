@@ -128,16 +128,48 @@ final class LocalSpeechService: ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    func speak(_ text: String) {
-        guard (UserDefaults.standard.object(forKey: "nava.voiceAutoSpeak") as? Bool) ?? true else { return }
-        speaker.stopSpeaking(at: .immediate)
-        let utterance = AVSpeechUtterance(string: text)
-        guard let persianVoice = AVSpeechSynthesisVoice(language: "fa-IR") else {
-            notice = "صدای فارسی در تنظیمات Speech آیفون نصب نیست. پاسخ متنی در نوا نمایش داده می‌شود."
-            return
+    /// iOS voice availability is independent of Whisper speech recognition.
+    /// A speech model for input does not install a system voice for output.
+    var hasPersianVoice: Bool { preferredPersianVoice() != nil }
+
+    private func preferredPersianVoice() -> AVSpeechSynthesisVoice? {
+        if let standard = AVSpeechSynthesisVoice(language: "fa-IR") { return standard }
+        // Some iOS variants expose only a generic fa voice identifier.
+        return AVSpeechSynthesisVoice.speechVoices().first { voice in
+            voice.language.replacingOccurrences(of: "_", with: "-")
+                .lowercased().hasPrefix("fa")
         }
-        utterance.voice = persianVoice
+    }
+
+    /// Returns false if Persian playback is not available. Do not silently
+    /// use Arabic or English voices to mispronounce Persian text.
+    @discardableResult
+    func speak(_ text: String) -> Bool {
+        guard (UserDefaults.standard.object(forKey: "nava.voiceAutoSpeak") as? Bool) ?? true else {
+            notice = "خواندن صوتی در تنظیمات نوا خاموش است؛ پاسخ به‌صورت متنی نمایش داده می‌شود."
+            return false
+        }
+        speaker.stopSpeaking(at: .immediate)
+        guard let voice = preferredPersianVoice() else {
+            notice = "موتور تبدیل گفتار به متن کار می‌کند، اما iOS این آیفون صدای فارسی برای خواندن پاسخ ندارد. پاسخ را روی صفحه ببین؛ در تنظیمات صدا می‌توانی زبان‌های موجود را بررسی کنی."
+            return false
+        }
+
+        do {
+            let session = AVAudioSession.sharedInstance()
+            // Audible even if the mute switch is on, subject to audio routing.
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try session.setActive(true)
+        } catch {
+            notice = "پخش صوتی آماده نشد: \(error.localizedDescription)"
+            return false
+        }
+        let cleanText = String(text.prefix(1800))
+        let utterance = AVSpeechUtterance(string: cleanText)
+        utterance.voice = voice
         utterance.rate = 0.49
+        notice = nil
         speaker.speak(utterance)
+        return true
     }
 }

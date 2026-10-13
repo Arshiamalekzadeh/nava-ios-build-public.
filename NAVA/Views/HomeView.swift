@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var showMemos = false
     @State private var showBackup = false
     @State private var showFocus = false
+    @State private var showShortcutSetup = false
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -59,6 +60,17 @@ struct HomeView: View {
                 VoiceMemosView()
                     .environmentObject(memos)
                     .environmentObject(activityManager)
+                    .environment(\.layoutDirection, .rightToLeft)
+            }
+            .sheet(isPresented: $showShortcutSetup, onDismiss: {
+                let key = NAVAShortcutsSetup.pendingVoiceTestKey
+                if UserDefaults.standard.bool(forKey: key) {
+                    UserDefaults.standard.removeObject(forKey: key)
+                    voiceRouter.open(listen: UserDefaults.standard.object(forKey: "nava.shortcutAutoListen") as? Bool ?? true)
+                }
+            }) {
+                NAVAShortcutsSetupView()
+                    .environmentObject(voiceRouter)
                     .environment(\.layoutDirection, .rightToLeft)
             }
             .sheet(isPresented: $showFocus) {
@@ -203,10 +215,9 @@ struct HomeView: View {
                 tile("Focus", subtitle: "تایمر و صدای محیطی", icon: "timer") {
                     showFocus = true
                 }
-                tile("فراخوانی Siri", subtitle: "Shortcuts و Action Button", icon: "waveform.path") {
-                    if let url = URL(string: "shortcuts://") {
-                        UIApplication.shared.open(url)
-                    }
+                tile("فراخوانی Siri", subtitle: "راه‌اندازی خودکار Shortcuts", icon: "waveform.path") {
+                    NAVAShortcuts.updateAppShortcutParameters()
+                    showShortcutSetup = true
                 }
             }
         }

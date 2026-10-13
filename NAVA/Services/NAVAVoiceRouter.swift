@@ -11,11 +11,22 @@ final class NAVAVoiceRouter: ObservableObject {
 
     @Published var presentation: Presentation?
     @Published var requestedAction: String?
+    @Published private(set) var autoListenRequested = false
     static let shortcutFlag = "nava.openVoiceRequested"
 
-    func open() {
+    func open(listen: Bool = false) {
+        if listen { autoListenRequested = true }
         guard presentation == nil else { return }
         presentation = Presentation()
+    }
+
+    /// The launch was explicitly requested through Siri, Shortcuts or a
+    /// listening deep link. Starting the microphone still requires iOS
+    /// permission and a foreground NAVA Voice scene.
+    func consumeAutoListen() -> Bool {
+        let requested = autoListenRequested
+        autoListenRequested = false
+        return requested
     }
 
     func handle(_ url: URL) {
@@ -25,13 +36,15 @@ final class NAVAVoiceRouter: ObservableObject {
             .queryItems?.first(where: { $0.name == "action" })?.value
         if action == "close" {
             requestedAction = "close"
+            open()
+        } else {
+            open(listen: action == "listen")
         }
-        open()
     }
 
     func consumeShortcutFlag() {
         guard UserDefaults.standard.bool(forKey: Self.shortcutFlag) else { return }
         UserDefaults.standard.removeObject(forKey: Self.shortcutFlag)
-        open()
+        open(listen: true)
     }
 }
