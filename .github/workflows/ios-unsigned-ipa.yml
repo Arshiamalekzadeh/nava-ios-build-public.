@@ -58,38 +58,7 @@ jobs:
             build 2>&1 | tee iphone-build.log
       - name: Validate and package unsigned IPA
         shell: bash
-        run: |
-          set -euo pipefail
-          APP="build-device/Build/Products/Release-iphoneos/NAVA.app"
-          test -d "$APP"
-          test -f "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -qx '4.5.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -qx '45'
-          for track in EmberRain StillSpace NightDrive; do
-            find "$APP" -name "$track.wav" -print -quit | grep -q . || { echo "Missing playable Focus track: $track"; exit 1; }
-          done
-          MODEL_DIR="$APP/PersianTTS"
-          test -s "$MODEL_DIR/fa_IR-gyro-medium.onnx" || { echo "Persian TTS weights missing from IPA"; exit 1; }
-          test -s "$MODEL_DIR/tokens.txt"
-          test -d "$MODEL_DIR/espeak-ng-data"
-          EXT="$APP/PlugIns/NAVAWidgetExtension.appex"
-          test -d "$EXT" || { echo "Missing Dynamic Island widget extension"; exit 1; }
-          test -f "$EXT/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$EXT/Info.plist" | grep -qx '4.5.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$EXT/Info.plist" | grep -qx '45'
-          /usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist" | grep -qx true
-          /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXT/Info.plist" | grep -qx 'com.apple.widgetkit-extension'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$APP/Info.plist" | grep -qx nava
-          rm -rf Payload
-          mkdir Payload
-          ditto "$APP" "Payload/NAVA.app"
-          zip -q -r NAVA-unsigned-iPhone.ipa Payload
-          unzip -t NAVA-unsigned-iPhone.ipa | tail -n 1
-          ls -lh NAVA-unsigned-iPhone.ipa
-          IPA_BYTES=$(stat -f%z NAVA-unsigned-iPhone.ipa)
-          echo "IPA size: $IPA_BYTES bytes"
-          test "$IPA_BYTES" -ge 5242880 || { echo "IPA smaller than the 5 MiB target"; exit 1; }
+        run: bash tools/package-iphone-ipa.sh
       - name: Upload unsigned iPhone IPA
         uses: actions/upload-artifact@v4
         with:
