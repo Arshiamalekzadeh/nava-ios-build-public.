@@ -1,0 +1,12 @@
+# Generated XcodeGen project
+NAVA.xcodeproj/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+DerivedData/
+.build/
+.DS_Store
+*.ipa
+*.dSYM
+
+# Generated original offline focus soundscapes
+NAVA/Resources/Sounds/*.wav
