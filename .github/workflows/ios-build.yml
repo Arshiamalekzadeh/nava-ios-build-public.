@@ -25,6 +25,8 @@ jobs:
         run: |
           swift tools/generate-icon.swift
           swift tools/generate-soundpack.swift
+      - name: Fetch bundled Persian Piper TTS model
+        run: bash tools/prepare-persian-tts.sh
       - name: Generate Xcode project
         run: xcodegen generate
       - name: Build unsigned simulator app
