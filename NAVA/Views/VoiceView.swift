@@ -24,6 +24,7 @@ struct VoiceView: View {
     @StateObject private var speech = LocalSpeechService()
     @State private var mode: NAVAVoiceMode = .record
     @State private var isHandling = false
+    @State private var isStartingCapture = false
     @State private var lastExecuted = ""
     @State private var feedback = ""
     @State private var lastHeardText = ""
@@ -341,7 +342,7 @@ struct VoiceView: View {
                 .background(NAVATheme.ember, in: RoundedRectangle(cornerRadius: 24))
             }
             .buttonStyle(NAVAButtonStyle())
-            .disabled(isHandling || offlineSpeech.isPreparing || offlineSpeech.isTranscribing)
+            .disabled(isHandling || isStartingCapture || offlineSpeech.isPreparing || offlineSpeech.isTranscribing)
             .padding(.horizontal, 14)
         }
         .padding(.top, 15)
@@ -421,7 +422,9 @@ struct VoiceView: View {
     }
 
     private func startPersianVoiceCapture() async {
-        guard !memos.isRecording && !isHandling else { return }
+        guard !memos.isRecording && !isHandling && !isStartingCapture else { return }
+        isStartingCapture = true
+        defer { isStartingCapture = false }
         do {
             try await offlineSpeech.prepare(model: offlineModel)
             try await memos.start()
