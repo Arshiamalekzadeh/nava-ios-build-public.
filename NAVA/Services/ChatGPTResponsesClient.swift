@@ -14,7 +14,7 @@ enum ChatGPTResponsesClient {
         ]
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
         request.httpMethod = "POST"
-        request.timeoutInterval = 90
+        request.timeoutInterval = 25
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
