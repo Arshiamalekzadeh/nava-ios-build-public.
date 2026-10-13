@@ -64,13 +64,25 @@ final class LiveActivityManager: ObservableObject {
     }
 
     func updateStatus(_ status: String, endsAt: Date? = nil, phase: NAVAIslandPhase? = nil) async {
+        // A sideload/restart may leave the extension installed with no
+        // active Activity. Start only for an explicitly active user session,
+        // never for an idle Ready update or a closing screen.
+        let resolved = phase ?? Self.inferPhase(status, endsAt: endsAt)
+        if !Activity<NAVAActivityAttributes>.activities.contains(where: { $0.activityState == .active }) {
+            if resolved != .ready {
+                await start(status: status, endsAt: endsAt, phase: resolved)
+            } else {
+                refreshDiagnostics()
+                return
+            }
+        }
         // NAVA 4.3 mistakenly discarded the phase argument, so every Island
         // update rendered the Ready state. Keep an explicit phase in content.
         let content = ActivityContent(
             state: NAVAActivityAttributes.ContentState(
                 status: status,
                 endsAt: endsAt,
-                phase: phase ?? Self.inferPhase(status, endsAt: endsAt)
+                phase: resolved
             ),
             staleDate: nil
         )
