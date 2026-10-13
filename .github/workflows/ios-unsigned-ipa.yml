@@ -1,0 +1,99 @@
+name: NAVA iPhone IPA (unsigned)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "NAVA/**"
+      - "NAVAWidgetExtension/**"
+      - "Shared/**"
+      - "project.yml"
+      - ".github/workflows/ios-unsigned-ipa.yml"
+  push:
+    branches: [main]
+    paths:
+      - "NAVA/**"
+      - "NAVAWidgetExtension/**"
+      - "Shared/**"
+      - "project.yml"
+      - ".github/workflows/ios-unsigned-ipa.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-iphone:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify Persian commands
+        run: |
+          swiftc NAVA/Services/NAVACommandParser.swift Tests/CommandParserTests.swift -o /tmp/nava-command-tests
+          /tmp/nava-command-tests
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          brew install xcodegen
+          swift tools/generate-icon.swift
+          swift tools/generate-soundpack.swift
+          xcodegen generate
+          xcodebuild -resolvePackageDependencies -project NAVA.xcodeproj -scheme NAVA
+      - name: Build iPhone app (unsigned)
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project NAVA.xcodeproj \
+            -scheme NAVA \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build-device \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee iphone-build.log
+      - name: Validate and package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="build-device/Build/Products/Release-iphoneos/NAVA.app"
+          test -d "$APP"
+          test -f "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -qx '4.2.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -qx '42'
+          for track in EmberRain StillSpace NightDrive; do
+            find "$APP" -name "$track.wav" -print -quit | grep -q . || { echo "Missing playable Focus track: $track"; exit 1; }
+          done
+          EXT="$APP/PlugIns/NAVAWidgetExtension.appex"
+          test -d "$EXT" || { echo "Missing Dynamic Island widget extension"; exit 1; }
+          test -f "$EXT/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist" | grep -qx true
+          /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXT/Info.plist" | grep -qx 'com.apple.widgetkit-extension'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$APP/Info.plist" | grep -qx nava
+          rm -rf Payload
+          mkdir Payload
+          ditto "$APP" "Payload/NAVA.app"
+          zip -q -r NAVA-unsigned-iPhone.ipa Payload
+          unzip -t NAVA-unsigned-iPhone.ipa | tail -n 1
+          ls -lh NAVA-unsigned-iPhone.ipa
+          IPA_BYTES=$(stat -f%z NAVA-unsigned-iPhone.ipa)
+          echo "IPA size: $IPA_BYTES bytes"
+          test "$IPA_BYTES" -ge 5242880 || { echo "IPA smaller than the 5 MiB target"; exit 1; }
+      - name: Upload unsigned iPhone IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAVA-unsigned-iPhone-IPA
+          path: NAVA-unsigned-iPhone.ipa
+          retention-days: 14
+          if-no-files-found: error
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAVA-iPhone-build-diagnostics
+          path: iphone-build.log
+          if-no-files-found: ignore
