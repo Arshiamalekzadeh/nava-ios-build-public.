@@ -10,10 +10,12 @@ import UIKit
 struct NAVADiagnosticsView: View {
     @EnvironmentObject private var activity: LiveActivityManager
     @EnvironmentObject private var voiceRouter: NAVAVoiceRouter
+    @EnvironmentObject private var persianTTS: NAVAPersianTTSService
     @State private var micStatus = "در حال بررسی…"
     @State private var speechStatus = "در حال بررسی…"
     @State private var persianStatus = "در حال بررسی…"
     @State private var extensionStatus = "در حال بررسی…"
+    @State private var islandReport = ""
     @State private var latestCheck = Date()
 
     var body: some View {
@@ -31,6 +33,7 @@ struct NAVADiagnosticsView: View {
                     diagnosticRow("تشخیص فارسی اپل", persianStatus, "character.bubble")
                     diagnosticRow("Widget Extension", extensionStatus, "capsule")
                     diagnosticRow("Live Activity", activity.diagnostic, "waveform.path")
+                    diagnosticRow("موتور صدای فارسی مستقل", persianTTS.isModelBundled ? "Piper و داده‌های تلفظ داخل اپ هستن" : "فایل‌های صدای Piper پیدا نشدن", "speaker.wave.2")
                 }
                 .padding(18)
                 .background(NAVATheme.card, in: RoundedRectangle(cornerRadius: 22))
@@ -63,6 +66,15 @@ struct NAVADiagnosticsView: View {
                         }
                     }
                     Button("تست صفحه Voice") { voiceRouter.open() }
+                    Button {
+                        Task { _ = await persianTTS.speak("سلام! من نوا هستم و می‌تونم به زبان فارسی صحبت کنم.") }
+                    } label: {
+                        Label("تست مستقل صدای فارسی نوا", systemImage: "speaker.wave.2.fill")
+                    }
+                    .disabled(!persianTTS.isModelBundled || persianTTS.isSynthesizing)
+                    if let issue = persianTTS.errorMessage {
+                        Text(issue).font(NAVATheme.type(12)).foregroundStyle(NAVATheme.sand)
+                    }
                 }
                 .diagnosticPanel()
 
@@ -122,6 +134,26 @@ struct NAVADiagnosticsView: View {
                             }
                         }
                     }
+                    Button {
+                        Task {
+                            await activity.stop()
+                            await activity.start(status: "در حال گوش دادن", phase: .listening)
+                            refresh()
+                        }
+                    } label: {
+                        Label("بازنشانی و ساخت Activity تازه", systemImage: "arrow.clockwise.circle")
+                    }
+                    Button("کپی گزارش نصب و ActivityKit") {
+                        refresh()
+                        UIPasteboard.general.string = islandReport
+                    }
+                    Text(islandReport)
+                        .font(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                        .foregroundStyle(NAVATheme.muted)
+                    Text("اگر ActivityKit فعال و شمارندهٔ فعالیت بالای صفر است ولی هیچ چیز در Lock Screen یا Dynamic Island دیده نمی‌شود، معمولاً اشکال در ثبت/امضای Widget Extension یا خود نسخهٔ iOS است؛ موفق بودن بیلد به‌تنهایی نمایش را تضمین نمی‌کند.")
+                        .font(NAVATheme.type(12))
+                        .foregroundStyle(NAVATheme.muted)
                     Button("پایان آزمایش") {
                         Task { await activity.stop(); refresh() }
                     }
@@ -189,9 +221,34 @@ struct NAVADiagnosticsView: View {
             ? (SFSpeechRecognizer(locale: Locale(identifier: "fa-IR"))?.isAvailable == true ? "روی این دستگاه در دسترس" : "پشتیبانی می‌شود ولی فعلاً در دسترس نیست")
             : "fa-IR در Speech این دستگاه پشتیبانی نمی‌شود"
         let widgetURL = Bundle.main.bundleURL.appendingPathComponent("PlugIns/NAVAWidgetExtension.appex")
-        extensionStatus = FileManager.default.fileExists(atPath: widgetURL.path)
-            ? "در بستهٔ نصب وجود دارد"
+        let bundle = Bundle(url: widgetURL)
+        let identifier = bundle?.bundleIdentifier ?? "ناموجود"
+        let point = (bundle?.infoDictionary?["NSExtension"] as? [String: Any])?["NSExtensionPointIdentifier"] as? String ?? "ناموجود"
+        let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        let widgetVersion = bundle?.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        let isPresent = FileManager.default.fileExists(atPath: widgetURL.path)
+        let signed = FileManager.default.fileExists(
+            atPath: widgetURL.appendingPathComponent("_CodeSignature/CodeResources").path
+        )
+        extensionStatus = isPresent
+            ? "\(identifier) · build \(widgetVersion) · \(signed ? "CodeResources موجود" : "امضای افزونه قابل‌تأیید نیست")"
             : "Extension در اپ نصب‌شده پیدا نشد؛ بسته و امضا را بررسی کن"
+        let statuses = Activity<NAVAActivityAttributes>.activities.map {
+            "\($0.id.prefix(8)): \($0.activityState)"
+        }.joined(separator: ", ")
+        islandReport = """
+        NAVA iOS: \(UIDevice.current.systemVersion)
+        Host bundle: \(Bundle.main.bundleIdentifier ?? "?")
+        Host build: \(appVersion)
+        Widget bundle: \(identifier)
+        Widget build: \(widgetVersion)
+        Widget exists: \(isPresent)
+        Widget code resources: \(signed)
+        Widget point: \(point)
+        ActivityKit allowed: \(ActivityAuthorizationInfo().areActivitiesEnabled)
+        Activity count: \(Activity<NAVAActivityAttributes>.activities.count)
+        Activity states: \(statuses)
+        """
         latestCheck = Date()
     }
 }

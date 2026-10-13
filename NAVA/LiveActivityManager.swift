@@ -13,7 +13,8 @@ final class LiveActivityManager: ObservableObject {
         isRunning = !activities.isEmpty
         let extensionURL = Bundle.main.bundleURL.appendingPathComponent("PlugIns/NAVAWidgetExtension.appex")
         let hasExtension = FileManager.default.fileExists(atPath: extensionURL.path)
-        diagnostic = "ActivityKit: \(ActivityAuthorizationInfo().areActivitiesEnabled ? "فعال" : "غیرفعال") · Live Activities: \(activities.count) · Extension: \(hasExtension ? "نصب" : "موجود نیست")"
+        let states = activities.map { "\($0.activityState)" }.joined(separator: ", ")
+        diagnostic = "ActivityKit: \(ActivityAuthorizationInfo().areActivitiesEnabled ? "فعال" : "غیرفعال") · Live Activities: \(activities.count) \(states) · Extension: \(hasExtension ? "نصب" : "موجود نیست")"
     }
 
     init() {
@@ -33,7 +34,15 @@ final class LiveActivityManager: ObservableObject {
         }
         if !Activity<NAVAActivityAttributes>.activities.isEmpty {
             isRunning = true
-            return
+            // Clean up old terminal activities from earlier installs. Never
+            // silently pretend that an ended activity is still rendering.
+            let active = Activity<NAVAActivityAttributes>.activities.contains {
+                $0.activityState == .active
+            }
+            if active { return }
+            for old in Activity<NAVAActivityAttributes>.activities {
+                await old.end(nil, dismissalPolicy: .immediate)
+            }
         }
 
         do {
@@ -55,13 +64,20 @@ final class LiveActivityManager: ObservableObject {
     }
 
     func updateStatus(_ status: String, endsAt: Date? = nil, phase: NAVAIslandPhase? = nil) async {
+        // NAVA 4.3 mistakenly discarded the phase argument, so every Island
+        // update rendered the Ready state. Keep an explicit phase in content.
         let content = ActivityContent(
-            state: NAVAActivityAttributes.ContentState(status: status, endsAt: endsAt),
+            state: NAVAActivityAttributes.ContentState(
+                status: status,
+                endsAt: endsAt,
+                phase: phase ?? Self.inferPhase(status, endsAt: endsAt)
+            ),
             staleDate: nil
         )
         for activity in Activity<NAVAActivityAttributes>.activities {
             await activity.update(content)
         }
+        refreshDiagnostics()
     }
 
     private static func inferPhase(_ status: String, endsAt: Date?) -> NAVAIslandPhase {

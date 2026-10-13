@@ -16,6 +16,8 @@ struct VoiceView: View {
     @EnvironmentObject private var memos: NAVAVoiceMemoStore
     @EnvironmentObject private var focus: NAVAFocusStore
     @EnvironmentObject private var offlineSpeech: NAVAOfflineSpeechService
+    @EnvironmentObject private var persianTTS: NAVAPersianTTSService
+    @AppStorage("nava.voiceAutoSpeak") private var autoSpeak = true
     @EnvironmentObject private var transcription: NAVATranscriptionService
     @AppStorage("nava.voiceOfflineModel") private var offlineModel = "base"
     @AppStorage("nava.voiceShortcutName") private var shortcutName = ""
@@ -41,6 +43,8 @@ struct VoiceView: View {
     private var statusText: String {
         if memos.isRecording { return "در حال ضبط صدای تو" }
         if offlineSpeech.isPreparing || offlineSpeech.isTranscribing { return offlineSpeech.phase }
+        if persianTTS.isSynthesizing { return "نوا در حال ساخت صدای فارسی است…" }
+        if persianTTS.isPlaying { return "نوا داره صحبت می‌کنه…" }
         if isHandling { return responsePhase.isEmpty ? "نوا در حال پاسخ است…" : responsePhase }
         return "نوا آماده است"
     }
@@ -129,16 +133,17 @@ struct VoiceView: View {
                                     .foregroundStyle(NAVATheme.muted)
                             }
                         }
-                        if let notice = speech.notice, !notice.isEmpty {
-                            messagePanel(notice, icon: "info.circle")
+                        if let audioError = persianTTS.errorMessage, !audioError.isEmpty {
+                            messagePanel(audioError, icon: "speaker.slash")
                         }
                         if let error = memos.errorMessage, !error.isEmpty {
                             messagePanel(error, icon: "exclamationmark.triangle")
                         }
 
                         Button {
-                            if !speech.speak("سلام، من نوا هستم.") {
-                                showVoiceHelp = true
+                            Task {
+                                let ok = await persianTTS.speak("سلام! من نوا هستم. از این به بعد می‌تونیم فارسی با هم صحبت کنیم.")
+                                if !ok { showVoiceHelp = true }
                             }
                         } label: {
                             Label("تست صدای نوا", systemImage: "speaker.wave.2")
@@ -202,16 +207,18 @@ struct VoiceView: View {
         }
         .onChange(of: mode) { _, _ in
             speech.stop()
+            persianTTS.stop()
             if memos.isRecording { _ = memos.stop() }
             Task { await activity.updateStatus("آماده گفتگو") }
         }
         .onDisappear {
             isDismissing = true
             speech.stop()
+            persianTTS.stop()
             if memos.isRecording { _ = memos.stop() }
             Task { await activity.updateStatus("آماده گفتگو") }
         }
-        .alert("صدای فارسی خروجی در iOS پیدا نشد", isPresented: $showVoiceHelp) {
+        .alert("تست موتور مستقل صدای فارسی", isPresented: $showVoiceHelp) {
             Button("تنظیمات NAVA") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
@@ -219,7 +226,7 @@ struct VoiceView: View {
             }
             Button("باشه", role: .cancel) {}
         } message: {
-            Text("Whisper صدای تو رو به متن تبدیل می‌کنه، ولی پخش پاسخ با صدای فارسی به یک موتور گفتار جدا نیاز داره. iOS در این دستگاه فعلاً صدای فارسی در اختیار برنامه قرار نمی‌ده؛ متن پاسخ همیشه قابل‌مشاهده است.")
+            Text(persianTTS.errorMessage ?? "مدل Piper فارسی برای پخش مستقل استفاده می‌شه. نتیجه تست صوتی رو بررسی کن.")
         }
         .confirmationDialog("دانلود موتور فارسی آفلاین", isPresented: $showModelDownloadConsent) {
             Button("دانلود مدل و شروع ضبط") {
@@ -370,6 +377,7 @@ struct VoiceView: View {
         guard voiceRouter.requestedAction == "close" else { return }
         isDismissing = true
         speech.stop()
+        persianTTS.stop()
         if memos.isRecording { _ = memos.stop() }
         await activity.stop()
         voiceRouter.requestedAction = nil
@@ -517,9 +525,14 @@ struct VoiceView: View {
             response = await chat.send(text, store: store)
         }
         feedback = "نوا: \(response)"
-        if !speech.speak(response) {
-            // A missing system fa-IR TTS voice must never conceal the reply.
-            // The response remains prominently readable in the UI.
+        if autoSpeak {
+            responsePhase = "در حال ساخت و پخش صدای فارسی…"
+            await activity.updateStatus("در حال پاسخ", phase: .responding)
+            // Fully offline Piper + sherpa-onnx audio, NOT Apple's missing fa-IR TTS.
+            let played = await persianTTS.speak(response)
+            if !played, let error = persianTTS.errorMessage {
+                feedback += "\n\n\(error)"
+            }
         }
         responsePhase = ""
         await activity.updateStatus("آماده گفتگو", phase: .ready)
