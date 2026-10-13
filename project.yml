@@ -27,7 +27,7 @@ targets:
       path: NAVA/Info.plist
       properties:
         CFBundleDisplayName: NAVA
-        CFBundleShortVersionString: "4.3.0"
+        CFBundleShortVersionString: "4.4.0"
         CFBundleVersion: "44"
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
@@ -63,7 +63,7 @@ targets:
       path: NAVAWidgetExtension/Info.plist
       properties:
         CFBundleDisplayName: NAVA Live Activity
-        CFBundleShortVersionString: "4.3.0"
+        CFBundleShortVersionString: "4.4.0"
         CFBundleVersion: "44"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
