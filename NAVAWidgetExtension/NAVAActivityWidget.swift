@@ -7,64 +7,30 @@ private let islandOrange = Color(red: 232 / 255, green: 80 / 255, blue: 2 / 255)
 private let islandCoral = Color(red: 1, green: 0.51, blue: 0.27)
 private let islandSand = Color(red: 217 / 255, green: 195 / 255, blue: 171 / 255)
 private let islandCloseURL = URL(string: "nava://voice?action=close")!
-private let islandVoiceURL = URL(string: "nava://voice")!
+private let islandVoiceURL = URL(string: "nava://voice?action=listen")!
 
-/// Pure SwiftUI original emblem. Built into the extension, so no image bundle
-/// or protected app assets are required to render the Dynamic Island.
+/// A bounded, opaque orange orb for WidgetKit's compact and minimal regions.
+/// Keep a solid base visible even when effects are reduced by the system.
 private struct NAVAIslandOrb: View {
     let diameter: CGFloat
 
     var body: some View {
         ZStack {
+            Circle().fill(islandOrange)
             Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 1, green: 0.88, blue: 0.64),
-                            islandCoral,
-                            Color(red: 0.79, green: 0.17, blue: 0.025),
-                            Color(red: 0.17, green: 0.055, blue: 0.035)
-                        ],
-                        center: UnitPoint(x: 0.27, y: 0.22),
-                        startRadius: 0,
-                        endRadius: diameter * 0.82
-                    )
-                )
-            Circle()
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [islandSand.opacity(0.85), islandOrange.opacity(0.45), .clear],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: max(0.5, diameter * 0.035)
-                )
-            Ellipse()
-                .stroke(
-                    LinearGradient(
-                        colors: [.clear, Color.white.opacity(0.8), islandSand.opacity(0.14), .clear],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    style: StrokeStyle(lineWidth: max(1, diameter * 0.09), lineCap: .round)
-                )
-                .frame(width: diameter * 0.64, height: diameter * 0.31)
-                .rotationEffect(.degrees(-43))
-                .offset(x: diameter * 0.08, y: diameter * 0.11)
-                .blur(radius: diameter * 0.035)
-            Ellipse()
-                .fill(Color.white.opacity(0.36))
-                .frame(width: diameter * 0.28, height: diameter * 0.11)
-                .rotationEffect(.degrees(-28))
-                .offset(x: -diameter * 0.14, y: -diameter * 0.21)
-                .blur(radius: diameter * 0.055)
+                .fill(RadialGradient(
+                    colors: [islandSand.opacity(0.9), islandCoral, islandOrange],
+                    center: .topLeading, startRadius: 0, endRadius: diameter
+                ))
+                .padding(diameter * 0.08)
+            Image(systemName: "waveform")
+                .font(.system(size: diameter * 0.43, weight: .semibold))
+                .foregroundStyle(Color.white)
         }
         .frame(width: diameter, height: diameter)
-        .shadow(color: islandOrange.opacity(0.5), radius: diameter * 0.18)
         .accessibilityLabel("نوا")
     }
 }
-
 /// Deliberately stylized equalizer, not a claim of sub-second live microphone
 /// metering. ActivityKit only receives updates at actual state transitions.
 private struct NAVAIslandWave: View {

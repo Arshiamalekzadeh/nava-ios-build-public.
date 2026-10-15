@@ -128,8 +128,12 @@ struct SettingsView: View {
                     Picker("مدل تشخیص فارسی", selection: $offlineModel) {
                         Text("Tiny · سریع‌تر و سبک‌تر").tag("tiny")
                         Text("Base · دقت بهتر").tag("base")
+                        Text("Small · دقیق‌تر، حافظه و دانلود بیشتر").tag("small")
                     }
                     .pickerStyle(.menu)
+                    Text("اگر فارسی را اشتباه تشخیص می‌دهد، مدل Small را امتحان کن؛ روی آیفون ۱۵ پرو هم پردازش آن از Base کندتر است.")
+                        .font(NAVATheme.type(12))
+                        .foregroundStyle(NAVATheme.muted)
                     Text("مدل جدا از IPA دانلود می‌شه و ممکنه ده‌ها تا صدها مگابایت حجم داشته باشه. بعد از دریافت، تشخیص صدا روی خود آیفون انجام می‌شه؛ برای بار اول اتصال اینترنت لازم داری.")
                         .font(NAVATheme.type(12))
                         .foregroundStyle(NAVATheme.muted)

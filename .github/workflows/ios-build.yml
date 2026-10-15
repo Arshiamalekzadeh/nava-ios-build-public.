@@ -21,6 +21,10 @@ jobs:
         run: |
           swiftc NAVA/Services/NAVACommandParser.swift Tests/CommandParserTests.swift -o /tmp/nava-command-tests
           /tmp/nava-command-tests
+      - name: Verify hands-free turn detection
+        run: |
+          swiftc NAVA/Services/NAVAVoiceActivityDetector.swift Tests/VoiceActivityDetectorTests.swift -o /tmp/nava-voice-tests
+          /tmp/nava-voice-tests
       - name: Generate metallic app icon
         run: |
           swift tools/generate-icon.swift

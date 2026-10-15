@@ -33,6 +33,7 @@ final class NAVAVoiceMemoStore: ObservableObject {
     @Published private(set) var isRecording = false
     @Published private(set) var elapsed: TimeInterval = 0
     @Published private(set) var level: CGFloat = 0
+    private(set) var averagePowerDB: Double = -160
     @Published private(set) var playingID: UUID?
     @Published var errorMessage: String?
 
@@ -93,6 +94,7 @@ final class NAVAVoiceMemoStore: ObservableObject {
             startedAt = Date()
             elapsed = 0
             level = 0
+            averagePowerDB = -160
             isRecording = true
             startMetering()
         } catch {
@@ -118,6 +120,7 @@ final class NAVAVoiceMemoStore: ObservableObject {
         isRecording = false
         elapsed = 0
         level = 0
+        averagePowerDB = -160
         defer {
             pendingURL = nil
             startedAt = nil
@@ -207,12 +210,13 @@ final class NAVAVoiceMemoStore: ObservableObject {
 
     private func startMetering() {
         ticker?.invalidate()
-        ticker = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.12, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if let recorder = self.recorder, self.isRecording {
                     recorder.updateMeters()
                     let power = recorder.averagePower(forChannel: 0)
+                    self.averagePowerDB = Double(power)
                     self.level = max(0.06, min(1, CGFloat(pow(10, power / 35))))
                     self.elapsed = recorder.currentTime
                 } else if let player = self.player, !player.isPlaying {
@@ -220,6 +224,8 @@ final class NAVAVoiceMemoStore: ObservableObject {
                 }
             }
         }
+        ticker = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func persist() {

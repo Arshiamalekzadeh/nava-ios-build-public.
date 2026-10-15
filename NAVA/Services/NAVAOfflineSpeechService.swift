@@ -21,7 +21,8 @@ final class NAVAOfflineSpeechService: ObservableObject {
 
     init() {
         if UserDefaults.standard.bool(forKey: "nava.whisper.model.prepared.tiny") ||
-           UserDefaults.standard.bool(forKey: "nava.whisper.model.prepared.base") {
+           UserDefaults.standard.bool(forKey: "nava.whisper.model.prepared.base") ||
+           UserDefaults.standard.bool(forKey: "nava.whisper.model.prepared.small") {
             phase = "مدل قبلاً دانلود شده؛ آماده بارگذاری روی آیفون"
         }
     }
@@ -49,14 +50,14 @@ final class NAVAOfflineSpeechService: ObservableObject {
             engine = nil
             engineVariant = nil
             // Explicit model selection avoids defaulting to the very large
-            // device-recommended model. Both variants are multilingual.
+            // device-recommended model. All variants are multilingual.
             let pipeline = try await WhisperKit(
                 WhisperKitConfig(model: variant, verbose: false, load: true, download: true)
             )
             engine = pipeline
             engineVariant = variant
             UserDefaults.standard.set(true, forKey: cachedPrefix + variant)
-            phase = "مدل \(variant == "base" ? "دقیق‌تر" : "سبک") آماده است · پردازش روی آیفون"
+            phase = "مدل \(variant.capitalized) آماده است · پردازش روی آیفون"
         } catch {
             let reason = "مدل آفلاین آماده نشد: \(error.localizedDescription)"
             errorMessage = reason
@@ -88,7 +89,11 @@ final class NAVAOfflineSpeechService: ObservableObject {
         }
 
         do {
-            let options = DecodingOptions(task: .transcribe, language: "fa")
+            let options = DecodingOptions(
+                task: .transcribe, language: "fa",
+                usePrefillPrompt: true, detectLanguage: false,
+                skipSpecialTokens: true, withoutTimestamps: true
+            )
             let results = try await pipeline.transcribe(
                 audioPath: file.path,
                 decodeOptions: options
@@ -108,7 +113,11 @@ final class NAVAOfflineSpeechService: ObservableObject {
     }
 
     private func normalized(_ value: String) -> String {
-        value == "base" ? "base" : "tiny"
+        switch value {
+        case "small": "small"
+        case "tiny": "tiny"
+        default: "base"
+        }
     }
 }
 
