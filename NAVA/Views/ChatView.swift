@@ -5,6 +5,7 @@ struct ChatView: View {
     @EnvironmentObject private var chat: NAVAChatStore
     @EnvironmentObject private var store: NAVAStore
     @EnvironmentObject private var chatGPT: ChatGPTAuthManager
+    @EnvironmentObject private var voiceRouter: NAVAVoiceRouter
     @State private var draft = ""
     @State private var isBusy = false
     @FocusState private var focused: Bool
@@ -102,6 +103,16 @@ struct ChatView: View {
                     }
 
                     HStack(alignment: .bottom, spacing: 12) {
+                        Button {
+                            focused = false
+                            voiceRouter.open(listen: true)
+                        } label: {
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 19, weight: .medium))
+                                .foregroundStyle(NAVATheme.orange)
+                                .frame(width: 44, height: 44)
+                        }
+                        .accessibilityLabel("شروع مکالمه صوتی با نوا")
                         TextField("فرمان یا یادداشتت رو بنویس…", text: $draft, axis: .vertical)
                             .lineLimit(1...4)
                             .focused($focused)

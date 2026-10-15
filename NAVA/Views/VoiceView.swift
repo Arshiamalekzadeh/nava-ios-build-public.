@@ -44,9 +44,7 @@ struct VoiceView: View {
     @State private var conversationRevision = 0
     @State private var isCompletingTurn = false
     @State private var waitingForAudioToFinish = false
-    @State private var heardSpeech = false
-    @State private var loudFrames = 0
-    @State private var lastLoudAt: TimeInterval = 0
+    @State private var voiceActivity = NAVAVoiceActivityDetector()
     @State private var conversationalError = ""
     @FocusState private var textFocused: Bool
 
@@ -164,6 +162,10 @@ struct VoiceView: View {
                                 .font(NAVATheme.type(12))
                                 .foregroundStyle(NAVATheme.sand)
                         }
+                        .disabled(memos.isRecording || isHandling || persianTTS.isSynthesizing)
+                        if let error = activity.errorMessage {
+                            messagePanel(error, icon: "exclamationmark.triangle")
+                        }
                         if !memos.memos.isEmpty {
                             Button {
                                 showArchive = true
@@ -218,9 +220,13 @@ struct VoiceView: View {
             monitorHandsFreeSilence(at: elapsed)
         }
         .onChange(of: persianTTS.isPlaying) { _, playing in
-            if !playing && waitingForAudioToFinish {
-                waitingForAudioToFinish = false
-                Task { await resumeHandsFreeListening() }
+            if !playing {
+                if waitingForAudioToFinish {
+                    waitingForAudioToFinish = false
+                    Task { await resumeHandsFreeListening() }
+                } else if !memos.isRecording && !isHandling && !isDismissing {
+                    Task { await activity.updateStatus("آماده گفتگو", phase: .ready) }
+                }
             }
         }
         .onChange(of: voiceRouter.autoListenRequested) { _, requested in
@@ -267,9 +273,9 @@ struct VoiceView: View {
             Button("دانلود مدل و شروع ضبط") {
                 Task { await startPersianVoiceCapture() }
             }
-            Button("انصراف", role: .cancel) {}
+            Button("انصراف", role: .cancel) { stopContinuousSession() }
         } message: {
-            Text("مدل \(offlineModel == "base" ? "Base" : "Tiny") یک بار از اینترنت دانلود می‌شه و ده‌ها تا صدها مگابایت حجم داره. تشخیص گفتار بعدش بدون API و روی آیفون انجام می‌شه.")
+            Text("مدل \(offlineModel.capitalized) یک بار از اینترنت دانلود می‌شه و ممکنه صدها مگابایت حجم داشته باشه. تشخیص گفتار بعدش بدون API و روی آیفون انجام می‌شه.")
         }
         .sheet(isPresented: $showArchive) {
             VoiceMemosView()
@@ -438,6 +444,7 @@ struct VoiceView: View {
     private func closeFromIsland() async {
         guard voiceRouter.requestedAction == "close" else { return }
         isDismissing = true
+        stopContinuousSession()
         speech.stop()
         persianTTS.stop()
         if memos.isRecording { _ = memos.stop() }
@@ -447,7 +454,8 @@ struct VoiceView: View {
     }
 
     private func launchVoiceFromShortcut() async {
-        if memos.isRecording { return }
+        guard !memos.isRecording, !isHandling, !isStartingCapture,
+              !persianTTS.isPlaying, !persianTTS.isSynthesizing, !isDismissing else { return }
         if continuousVoice { continuousSession = true }
         if offlineSpeech.wasPrepared(offlineModel) {
             await startPersianVoiceCapture()
@@ -503,20 +511,26 @@ struct VoiceView: View {
     }
 
     private func startPersianVoiceCapture() async {
-        guard !memos.isRecording && !isHandling && !isStartingCapture else { return }
+        guard !memos.isRecording && !isHandling && !isStartingCapture && !isDismissing else { return }
         isStartingCapture = true
+        let revision = conversationRevision
         defer { isStartingCapture = false }
         do {
             try await offlineSpeech.prepare(model: offlineModel)
+            guard revision == conversationRevision, !isDismissing else { return }
+            persianTTS.stop()
             try await memos.start()
-            heardSpeech = false
-            loudFrames = 0
-            lastLoudAt = 0
+            guard revision == conversationRevision, !isDismissing else {
+                _ = memos.stop(save: false)
+                return
+            }
+            voiceActivity = NAVAVoiceActivityDetector()
             conversationalError = ""
             feedback = ""
             await activity.start(status: "در حال شنیدن فارسی")
             await activity.updateStatus("در حال شنیدن فارسی")
         } catch {
+            guard revision == conversationRevision, !isDismissing else { return }
             if continuousSession { stopContinuousSession() }
             feedback = error.localizedDescription
             await activity.updateStatus("آماده گفتگو", phase: .ready)
@@ -529,32 +543,19 @@ struct VoiceView: View {
     /// permission and an active foreground NAVA conversation.
     private func monitorHandsFreeSilence(at elapsed: TimeInterval) {
         guard continuousSession, mode == .recognize, memos.isRecording,
-              !isHandling, !isCompletingTurn, !isStartingCapture, !isDismissing else { return }
-        guard elapsed >= 0.55 else { return }
-
-        // Recorder's non-zero meter floor is approximately 0.06. Require
-        // successive loud frames to avoid treating clicks as speech.
-        let level = Double(memos.level)
-        if level >= max(0.1, voiceSensitivity) {
-            loudFrames += 1
-            if loudFrames >= 3 {
-                heardSpeech = true
-                lastLoudAt = elapsed
-            }
-        } else {
-            loudFrames = 0
-        }
-
-        if heardSpeech && elapsed >= 1.2 &&
-            ((elapsed - lastLoudAt) >= 1.45 || elapsed >= 26.0) {
+              !isHandling, !isCompletingTurn, !isDismissing else { return }
+        switch voiceActivity.observe(power: memos.averagePowerDB, elapsed: elapsed, sensitivity: voiceSensitivity) {
+        case .endOfSpeech:
             isCompletingTurn = true
             Task { await finishHandsFreeTurn() }
-        } else if !heardSpeech && elapsed >= 35.0 {
+        case .noSpeech:
             // Never silently upload/interpret a long empty recording.
             stopContinuousSession()
             _ = memos.stop(save: false)
             feedback = "صدایی تشخیص ندادم. برای شروع دوباره، میکروفون رو بزن."
             Task { await activity.updateStatus("آماده گفتگو", phase: .ready) }
+        case .listening:
+            break
         }
     }
 
@@ -563,8 +564,7 @@ struct VoiceView: View {
         continuousSession = false
         waitingForAudioToFinish = false
         isCompletingTurn = false
-        heardSpeech = false
-        loudFrames = 0
+        voiceActivity = NAVAVoiceActivityDetector()
     }
 
     private func finishHandsFreeTurn() async {
@@ -648,6 +648,9 @@ struct VoiceView: View {
     private func sendTypedCommand() {
         let text = typedCommand.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isHandling else { return }
+        stopContinuousSession()
+        if memos.isRecording { _ = memos.stop(save: false) }
+        persianTTS.stop()
         typedCommand = ""
         textFocused = false
         executeCommand(text)

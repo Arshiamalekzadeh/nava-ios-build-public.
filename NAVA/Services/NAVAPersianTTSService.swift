@@ -28,7 +28,7 @@ final class NAVAPersianTTSService: ObservableObject {
             return false
         }
         guard let directory = Self.resourcesDirectory() else {
-            errorMessage = "مدل صدای فارسی در فایل نصب برنامه پیدا نشد. نسخه ۴.۴ کامل رو نصب کن."
+            errorMessage = "مدل صدای فارسی در فایل نصب برنامه پیدا نشد. IPA کامل را همراه منابع صدا نصب کن."
             return false
         }
         let clean = raw
@@ -73,6 +73,7 @@ final class NAVAPersianTTSService: ObservableObject {
             }
             return true
         } catch {
+            guard turnGeneration == playbackGeneration else { return false }
             isSynthesizing = false
             errorMessage = "صدای فارسی ساخته یا پخش نشد: \(error.localizedDescription)"
             return false
