@@ -34,6 +34,7 @@ final class NAVAChatStore: ObservableObject {
 
     private let key = "nava.messages.v2"
     private let clock = DateFormatter()
+    private let deviceControls = NAVADeviceControlService()
 
     init() {
         if let bytes = UserDefaults.standard.data(forKey: key),
@@ -99,6 +100,9 @@ final class NAVAChatStore: ObservableObject {
             • ساعت چنده / امروز چندمه
             • نقشه میدان آزادی
             • سرچ کن آموزش SwiftUI
+            • روشنایی پنجاه درصد / نور صفحه رو کم کن
+            • چراغ قوه رو روشن کن / خاموش کن
+            • صدا رو سی درصد کن (با شورتکات تنظیم‌شده)
 
             گفت‌وگوی آزاد با ChatGPT در اپ رسمی انجام می‌شه.
             """
@@ -165,6 +169,8 @@ final class NAVAChatStore: ObservableObject {
                 pendingAction = NAVAPendingAction(title: "جستجوی «\(term)»", destination: url)
             }
             return "جستجوی «\(term)» آماده شد. دکمه پایین رو بزن تا نتایج باز بشن."
+        case .deviceControl(let command):
+            return await deviceControls.execute(command)
         case .unknown:
             return "این دستور رو هنوز نمی‌شناسم. «راهنما» رو بفرست تا فرمان‌های پشتیبانی‌شده رو ببینی. برای سؤال‌های آزاد می‌تونی مستقیم بری ChatGPT."
         }

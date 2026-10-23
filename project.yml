@@ -12,8 +12,8 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
-    MARKETING_VERSION: "4.5.1"
-    CURRENT_PROJECT_VERSION: "46"
+    MARKETING_VERSION: "4.6.0"
+    CURRENT_PROJECT_VERSION: "47"
 targets:
   NAVA:
     type: application
@@ -27,8 +27,8 @@ targets:
       path: NAVA/Info.plist
       properties:
         CFBundleDisplayName: NAVA
-        CFBundleShortVersionString: "4.5.1"
-        CFBundleVersion: "46"
+        CFBundleShortVersionString: "4.6.0"
+        CFBundleVersion: "47"
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
         UIBackgroundModes:
@@ -39,6 +39,7 @@ targets:
               - nava
         NSCalendarsFullAccessUsageDescription: "NAVA adds calendar events when you explicitly request them."
         NSMicrophoneUsageDescription: "NAVA uses the microphone only when you start a voice command."
+        NSCameraUsageDescription: "NAVA needs camera-device permission only to control the flashlight when you request it. No photos or videos are recorded."
         NSSpeechRecognitionUsageDescription: "NAVA transcribes voice commands to run local actions."
     settings:
       base:
@@ -63,8 +64,8 @@ targets:
       path: NAVAWidgetExtension/Info.plist
       properties:
         CFBundleDisplayName: NAVA Live Activity
-        CFBundleShortVersionString: "4.5.1"
-        CFBundleVersion: "46"
+        CFBundleShortVersionString: "4.6.0"
+        CFBundleVersion: "47"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

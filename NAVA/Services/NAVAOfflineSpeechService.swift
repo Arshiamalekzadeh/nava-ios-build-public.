@@ -112,6 +112,22 @@ final class NAVAOfflineSpeechService: ObservableObject {
         }
     }
 
+    /// Decode captured 16 kHz mono samples directly, without writing or closing a recording.
+    func transcribe(samples: [Float]) async throws -> String {
+        guard let pipeline = engine, !isTranscribing, !isPreparing else {
+            throw NAVAOfflineSpeechError.busy
+        }
+        isTranscribing = true
+        defer { isTranscribing = false }
+        let options = DecodingOptions(
+            task: .transcribe, language: "fa", temperatureFallbackCount: 1,
+            usePrefillPrompt: true, detectLanguage: false,
+            skipSpecialTokens: true, withoutTimestamps: true
+        )
+        let results = try await pipeline.transcribe(audioArray: samples, decodeOptions: options)
+        return results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func normalized(_ value: String) -> String {
         switch value {
         case "small": "small"

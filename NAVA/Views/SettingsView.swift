@@ -18,7 +18,6 @@ struct SettingsView: View {
     @AppStorage("nava.voiceShortcutName") private var voiceShortcutName = ""
     @AppStorage("nava.voiceAutoSpeak") private var autoSpeak = true
     @AppStorage("nava.shortcutAutoListen") private var shortcutAutoListen = true
-    @AppStorage("nava.voiceContinuous") private var continuousVoice = true
     @AppStorage("nava.voiceAutoStartOnOpen") private var autoStartOnOpen = true
     @AppStorage("nava.voiceSensitivity") private var voiceSensitivity = 0.16
     @State private var showBackup = false
@@ -39,7 +38,7 @@ struct SettingsView: View {
                             Text("NAVA")
                                 .font(.system(size: 20, weight: .ultraLight))
                                 .tracking(5)
-                            Text("Personal OS · نسخه ۴.۵")
+                            Text("Personal OS · نسخه ۴.۶")
                                 .font(NAVATheme.type(12))
                                 .foregroundStyle(NAVATheme.sand)
                         }
@@ -171,13 +170,22 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("کنترل گوشی با فرمان فارسی") {
+                    NavigationLink {
+                        NAVADeviceControlsSetupView()
+                    } label: {
+                        Label("روشنایی، چراغ قوه و تنظیم صدا", systemImage: "iphone")
+                    }
+                }
+
                 Section("استودیوی صدا") {
                     Label("ضبط آفلاین M4A · \(voiceMemos.memos.count) فایل", systemImage: "waveform")
                     Label("موتور فارسی اپل: \(SFSpeechRecognizer(locale: Locale(identifier: "fa-IR"))?.isAvailable == true ? "در دسترس" : "در دسترس نیست")",
                           systemImage: "text.bubble")
                         .font(NAVATheme.type(12))
                     Toggle("نوا پاسخ‌ها را با صدای فارسی بخواند", isOn: $autoSpeak)
-                    Toggle("مکالمه بدون نیاز به ارسال دستی", isOn: $continuousVoice)
+                    Label("مکالمه صوتی همیشه با تشخیص زنده و ارسال خودکار است", systemImage: "waveform")
+                        .font(NAVATheme.type(12))
                     Toggle("شروع مکالمه با بازکردن صفحه Voice", isOn: $autoStartOnOpen)
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
@@ -193,7 +201,7 @@ struct SettingsView: View {
                             .foregroundStyle(NAVATheme.muted)
                     }
                     .font(NAVATheme.type(12))
-                    Text("فقط در صفحه باز Voice گوش می‌ده: بعد از حدود ۱٫۵ ثانیه مکث، متن فارسی رو تشخیص می‌ده، با Piper جواب می‌ده و دوباره گوش می‌ده. این مکالمه خودکار نوبتیه، نه Voice API یا بیدارباش دائمی.")
+                    Text("در صفحه Voice متن فارسی هنگام صحبت به‌روز می‌شود. با حدود ۱٫۵ ثانیه مکث، جمله نهایی و پاسخ آماده می‌شود؛ پس از پخش پاسخ، میکروفون خودکار دوباره فعال می‌شود. سرعت متن زنده به مدل و توان آیفون بستگی دارد. هنگام پخش پاسخ گوش نمی‌دهد.")
                         .font(NAVATheme.type(12))
                         .foregroundStyle(NAVATheme.muted)
                     Label(

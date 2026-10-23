@@ -16,6 +16,7 @@ enum NAVACommand {
     case openChatGPT
     case mapSearch(String)
     case webSearch(String)
+    case deviceControl(NAVADeviceControlCommand)
     case unknown
 }
 
@@ -112,6 +113,7 @@ enum NAVACommandParser {
             }
         }
 
+        if let control = NAVADeviceControlParser.parse(text) { return .deviceControl(control) }
         return .unknown
     }
 

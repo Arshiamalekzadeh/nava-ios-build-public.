@@ -19,12 +19,16 @@ jobs:
         run: brew install xcodegen
       - name: Verify Persian commands
         run: |
-          swiftc NAVA/Services/NAVACommandParser.swift Tests/CommandParserTests.swift -o /tmp/nava-command-tests
+          swiftc NAVA/Services/NAVACommandParser.swift NAVA/Services/NAVADeviceControlParser.swift Tests/CommandParserTests.swift -o /tmp/nava-command-tests
           /tmp/nava-command-tests
       - name: Verify hands-free turn detection
         run: |
           swiftc NAVA/Services/NAVAVoiceActivityDetector.swift Tests/VoiceActivityDetectorTests.swift -o /tmp/nava-voice-tests
           /tmp/nava-voice-tests
+      - name: Verify live speech buffering and automatic turns
+        run: |
+          swiftc NAVA/Services/NAVAVoiceActivityDetector.swift NAVA/Services/NAVALiveSpeechWindow.swift Tests/LiveSpeechWindowTests.swift -o /tmp/nava-live-tests
+          /tmp/nava-live-tests
       - name: Generate metallic app icon
         run: |
           swift tools/generate-icon.swift

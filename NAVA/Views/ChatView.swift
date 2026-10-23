@@ -125,7 +125,7 @@ struct ChatView: View {
                             focused = false
                             isBusy = true
                             Task {
-                                if chatGPT.canUsePlan {
+                                if case .unknown = NAVACommandParser.parse(text), chatGPT.canUsePlan {
                                     await chat.sendAI(text, auth: chatGPT)
                                 } else {
                                     await chat.send(text, store: store)
