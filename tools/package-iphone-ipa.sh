@@ -5,8 +5,8 @@
 # stamps BOTH unsigned bundles from the release version before packaging.
 set -euo pipefail
 
-EXPECTED_VERSION="4.5.0"
-EXPECTED_BUILD="45"
+EXPECTED_VERSION="4.6.0"
+EXPECTED_BUILD="47"
 APP="build-device/Build/Products/Release-iphoneos/NAVA.app"
 EXT="$APP/PlugIns/NAVAWidgetExtension.appex"
 MODEL_DIR="$APP/PersianTTS"

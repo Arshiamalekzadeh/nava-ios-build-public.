@@ -64,6 +64,49 @@ struct CommandParserTests {
             check(true, "ChatGPT handoff")
         } else { fatalError("ChatGPT route not parsed") }
 
+        for call in ["نوا", "نوا!", "هی نوا؟"] {
+            if case .greeting = NAVACommandParser.parse(call) {
+                check(true, "Calling NAVA in an active conversation")
+            } else { fatalError("Assistant name was not recognized") }
+        }
+        let deviceCases: [(String, NAVADeviceControlCommand)] = [
+            ("روشنایی پنجاه درصد", .brightness(0.5)),
+            ("نور صفحه رو ۷۵ درصد کن", .brightness(0.75)),
+            ("نوا روشنایی بیست و پنج درصد", .brightness(0.25)),
+            ("نور گوشی رو کم کن", .brightnessChange(-0.1)),
+            ("صدا رو سی درصد کن", .volume(0.3)),
+            ("صدای گوشی رو زیاد کن", .volumeChange(0.1)),
+            ("صدا رو بی صدا کن", .volume(0)),
+            ("چراغ‌قوه رو روشن کن", .torch(true)),
+            ("چراغ قوه را خاموش کن", .torch(false)),
+            ("چراغ قوه رو روشن نکن", .help),
+            ("روشنایی ۱۵۰ درصد", .help),
+            ("صدا -۱۰ درصد", .help),
+            ("چراغ قوه روشن کن و صدا رو زیاد کن", .help)
+        ]
+        for (text, expected) in deviceCases {
+            if case .deviceControl(let actual) = NAVACommandParser.parse(text) {
+                check(actual == expected, "Device control: \(text)")
+            } else { fatalError("Device control not parsed: \(text)") }
+        }
+        if case .addNote(let body) = NAVACommandParser.parse("یادداشت کن روشنایی پنجاه درصد") {
+            check(body == "روشنایی پنجاه درصد", "Note content must not execute a device action")
+        } else { fatalError("Note/device routing collision") }
+
+        let shortcutName = "NAVA صدا & Volume"
+        let token = "test-request-47"
+        let shortcut = NAVADeviceShortcut.volumeURL(name: shortcutName, fraction: 0.5, token: token)!
+        let query = URLComponents(url: shortcut, resolvingAgainstBaseURL: false)!.queryItems!
+        check(query.first { $0.name == "name" }?.value == shortcutName, "Shortcut name round-trips with Persian and ampersands")
+        check(query.first { $0.name == "text" }?.value == "0.5", "Volume input is a fraction, not a percent")
+        let callback = URL(string: query.first { $0.name == "x-success" }!.value!)!
+        check(NAVADeviceShortcut.callbackStatus(callback, expectedToken: token, issuedAt: now, now: now) == .success, "Accept matching callback")
+        check(NAVADeviceShortcut.callbackStatus(callback, expectedToken: "another-turn", issuedAt: now, now: now) == nil, "Reject stale request token")
+        check(NAVADeviceShortcut.callbackStatus(callback, expectedToken: token, issuedAt: now, now: now.addingTimeInterval(301)) == nil, "Reject expired callback")
+        let duplicateCallback = URL(string: callback.absoluteString + "&status=cancel")!
+        check(NAVADeviceShortcut.callbackStatus(duplicateCallback, expectedToken: token, issuedAt: now, now: now) == nil, "Reject ambiguous callback")
+        check(NAVADeviceShortcut.volumeURL(name: "", fraction: 0.5, token: token) == nil, "Reject unnamed shortcut")
+        check(NAVADeviceShortcut.volumeURL(name: "Volume", fraction: .nan, token: token) == nil, "Reject non-finite volume")
         print("✅ \(checks) NAVA parser checks passed")
     }
 }

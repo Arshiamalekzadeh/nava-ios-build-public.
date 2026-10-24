@@ -16,6 +16,7 @@ enum NAVACommand {
     case openChatGPT
     case mapSearch(String)
     case webSearch(String)
+    case deviceControl(NAVADeviceControlCommand)
     case unknown
 }
 
@@ -45,7 +46,8 @@ enum NAVACommandParser {
         let text = input.lowercased()
         guard !text.isEmpty else { return .help }
 
-        if ["سلام", "سلام نوا", "hi", "hello", "درود", "نوا سلام"].contains(text) {
+        let greetingText = text.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        if ["سلام", "سلام نوا", "hi", "hello", "درود", "نوا سلام", "نوا", "هی نوا"].contains(greetingText) {
             return .greeting
         }
         if text.contains("راهنما") || text.contains("چه کار") || text.contains("چیکار میتونی") || text == "help" {
@@ -112,6 +114,7 @@ enum NAVACommandParser {
             }
         }
 
+        if let control = NAVADeviceControlParser.parse(text) { return .deviceControl(control) }
         return .unknown
     }
 
