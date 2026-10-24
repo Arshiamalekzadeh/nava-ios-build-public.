@@ -20,6 +20,14 @@ struct VoiceActivityDetectorTests {
         assert(feed(&quiet, power: -65, from: 2.04, through: 3) == .listening)
         assert(feed(&quiet, power: -65, from: 3.12, through: 4) == .endOfSpeech)
 
+        var earlySpeech = NAVAVoiceActivityDetector()
+        _ = earlySpeech.observe(power: -65, elapsed: 0.12, sensitivity: 0.16)
+        _ = earlySpeech.observe(power: -35, elapsed: 0.24, sensitivity: 0.16)
+        _ = earlySpeech.observe(power: -30, elapsed: 0.36, sensitivity: 0.16)
+        _ = earlySpeech.observe(power: -40, elapsed: 0.48, sensitivity: 0.16)
+        _ = earlySpeech.observe(power: -40, elapsed: 0.60, sensitivity: 0.16)
+        assert(earlySpeech.heardSpeech, "A first syllable must not overwrite the quiet calibration frame")
+
         var noise = NAVAVoiceActivityDetector()
         assert(feed(&noise, power: -32, from: 0, through: 34.9) == .listening)
         assert(!noise.heardSpeech)

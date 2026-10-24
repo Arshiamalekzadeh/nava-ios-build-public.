@@ -27,7 +27,7 @@ jobs:
           /tmp/nava-voice-tests
       - name: Verify live speech buffering and automatic turns
         run: |
-          swiftc NAVA/Services/NAVAVoiceActivityDetector.swift NAVA/Services/NAVALiveSpeechWindow.swift Tests/LiveSpeechWindowTests.swift -o /tmp/nava-live-tests
+          swiftc NAVA/Services/NAVAVoiceActivityDetector.swift NAVA/Services/NAVALiveSpeechWindow.swift NAVA/Services/NAVAInterruptionGate.swift Tests/LiveSpeechWindowTests.swift -o /tmp/nava-live-tests
           /tmp/nava-live-tests
       - name: Generate metallic app icon
         run: |

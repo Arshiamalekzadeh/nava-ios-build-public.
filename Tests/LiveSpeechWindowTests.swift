@@ -36,6 +36,17 @@ struct LiveSpeechWindowTests {
         feed(&next, power: -35, seconds: 30)
         assert(next.isComplete, "Long speech is capped without unbounded memory")
         assert(next.samples.count <= NAVALiveSpeechWindow.sampleRate * 29)
-        print("Live speech window checks passed")
+        var interruption = NAVAInterruptionGate()
+        assert(!interruption.observe(isVoiceActive: false, at: 0))
+        assert(!interruption.observe(isVoiceActive: true, at: 1))
+        assert(!interruption.observe(isVoiceActive: true, at: 1.1))
+        assert(!interruption.observe(isVoiceActive: false, at: 1.15), "A short click cannot interrupt")
+        assert(!interruption.observe(isVoiceActive: true, at: 2))
+        assert(interruption.observe(isVoiceActive: true, at: 2.3), "Sustained user speech interrupts")
+        assert(!interruption.observe(isVoiceActive: true, at: 3), "One interruption event per reply")
+        var newReply = NAVAInterruptionGate()
+        assert(!newReply.observe(isVoiceActive: true, at: 0))
+        assert(newReply.observe(isVoiceActive: true, at: 0.3), "A new reply can be interrupted again")
+        print("Live speech window and interruption checks passed")
     }
 }

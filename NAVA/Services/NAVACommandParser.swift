@@ -46,7 +46,8 @@ enum NAVACommandParser {
         let text = input.lowercased()
         guard !text.isEmpty else { return .help }
 
-        if ["سلام", "سلام نوا", "hi", "hello", "درود", "نوا سلام"].contains(text) {
+        let greetingText = text.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        if ["سلام", "سلام نوا", "hi", "hello", "درود", "نوا سلام", "نوا", "هی نوا"].contains(greetingText) {
             return .greeting
         }
         if text.contains("راهنما") || text.contains("چه کار") || text.contains("چیکار میتونی") || text == "help" {

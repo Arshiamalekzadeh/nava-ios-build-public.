@@ -51,12 +51,12 @@ final class NAVAChatStore: ObservableObject {
     }
 
     @discardableResult
-    func send(_ raw: String, store: NAVAStore) async -> String {
+    func send(_ raw: String, store: NAVAStore, resumeVoiceAfterShortcut: Bool = false) async -> String {
         let message = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty else { return "" }
         pendingAction = nil
         messages.append(NAVAMessage(role: .user, text: message))
-        let reply = await handle(NAVACommandParser.parse(message), store: store)
+        let reply = await handle(NAVACommandParser.parse(message), store: store, resumeVoiceAfterShortcut: resumeVoiceAfterShortcut)
         messages.append(NAVAMessage(role: .nava, text: reply))
         persist()
         return reply
@@ -77,17 +77,19 @@ final class NAVAChatStore: ObservableObject {
             let token = try await auth.accessTokenForPlan()
             reply = try await ChatGPTResponsesClient.reply(history: messages, accessToken: token)
         } catch {
+            if Task.isCancelled { return "" }
             reply = "پاسخ ChatGPT دریافت نشد: \(error.localizedDescription)"
         }
+        guard !Task.isCancelled else { return "" }
         messages.append(NAVAMessage(role: .nava, text: reply))
         persist()
         return reply
     }
 
-    private func handle(_ command: NAVACommand, store: NAVAStore) async -> String {
+    private func handle(_ command: NAVACommand, store: NAVAStore, resumeVoiceAfterShortcut: Bool) async -> String {
         switch command {
         case .greeting:
-            return "سلام! خوش اومدی 🖤 بگو چی برات ثبت کنم یا کجا رو پیدا کنیم."
+            return "جانم! گوش می‌دم؛ بگو چی برات انجام بدم."
         case .help:
             return """
             این فرمان‌ها رو امتحان کن:
@@ -170,7 +172,7 @@ final class NAVAChatStore: ObservableObject {
             }
             return "جستجوی «\(term)» آماده شد. دکمه پایین رو بزن تا نتایج باز بشن."
         case .deviceControl(let command):
-            return await deviceControls.execute(command)
+            return await deviceControls.execute(command, resumeVoiceAfterShortcut: resumeVoiceAfterShortcut)
         case .unknown:
             return "این دستور رو هنوز نمی‌شناسم. «راهنما» رو بفرست تا فرمان‌های پشتیبانی‌شده رو ببینی. برای سؤال‌های آزاد می‌تونی مستقیم بری ChatGPT."
         }

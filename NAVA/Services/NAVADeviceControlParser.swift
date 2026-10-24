@@ -9,6 +9,40 @@ enum NAVADeviceControlCommand: Equatable {
     case help
 }
 
+enum NAVADeviceShortcut {
+    static let tokenKey = "nava.volume.callbackToken"
+    static let issuedAtKey = "nava.volume.callbackIssuedAt"
+    static let resumeKey = "nava.volume.callbackResumeVoice"
+    enum Status: String { case success, cancel, error }
+
+    static func volumeURL(name: String, fraction: Double, token: String) -> URL? {
+        guard fraction.isFinite, (0...1).contains(fraction), !token.isEmpty,
+              !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        var request = URLComponents(string: "shortcuts://x-callback-url/run-shortcut")!
+        request.queryItems = [URLQueryItem(name: "name", value: name),
+                              URLQueryItem(name: "input", value: "text"),
+                              URLQueryItem(name: "text", value: String(fraction))]
+        for status in [Status.success, .cancel, .error] {
+            var callback = URLComponents(string: "nava://device-volume")!
+            callback.queryItems = [URLQueryItem(name: "token", value: token),
+                                   URLQueryItem(name: "status", value: status.rawValue)]
+            request.queryItems?.append(URLQueryItem(name: "x-\(status.rawValue)", value: callback.url!.absoluteString))
+        }
+        return request.url
+    }
+
+    static func callbackStatus(_ url: URL, expectedToken: String, issuedAt: Date, now: Date = Date()) -> Status? {
+        guard url.scheme?.lowercased() == "nava", url.host?.lowercased() == "device-volume",
+              !expectedToken.isEmpty, (0...300).contains(now.timeIntervalSince(issuedAt)),
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return nil }
+        let tokens = items.filter { $0.name == "token" }
+        let statuses = items.filter { $0.name == "status" }
+        guard tokens.count == 1, tokens.first?.value == expectedToken,
+              statuses.count == 1, let raw = statuses.first?.value else { return nil }
+        return Status(rawValue: raw)
+    }
+}
+
 enum NAVADeviceControlParser {
     static func parse(_ raw: String) -> NAVADeviceControlCommand? {
         var text = NAVACommandParser.normalized(raw).lowercased()

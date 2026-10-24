@@ -40,6 +40,9 @@ struct NAVAShortcutsSetupView: View {
                         Text("با این گزینه، Shortcuts و Siri بعد از بازکردن نوا، مستقیماً حالت تشخیص فارسی رو فعال می‌کنن. میکروفون فقط وقتی اپ در پیش‌زمینه باز شده و مجوزش داده شده، شروع می‌شه. دانلود اولیه Whisper نیاز به تأیید تو داره.")
                             .font(NAVATheme.type(12))
                             .foregroundStyle(NAVATheme.muted)
+                        Text("داخل مکالمه می‌تونی بگی «نوا» تا جواب بده. وقتی اپ بسته است، برای بازکردنش از Siri و عبارت Talk to NAVA استفاده کن؛ «هی نوا» بیرون اپ فعال نیست.")
+                            .font(NAVATheme.type(12))
+                            .foregroundStyle(NAVATheme.muted)
                     }
                     .padding(17)
                     .background(NAVATheme.card, in: RoundedRectangle(cornerRadius: 20))

@@ -1,4 +1,5 @@
 import SwiftUI
+import MediaPlayer
 
 struct NAVADeviceControlsSetupView: View {
     @AppStorage("nava.deviceVolumeShortcut") private var shortcutName = "NAVA Volume"
@@ -19,9 +20,25 @@ struct NAVADeviceControlsSetupView: View {
                     .font(.footnote).foregroundStyle(.secondary)
                 Toggle("شورتکات را ساخته و تنظیم کرده‌ام", isOn: $shortcutReady)
                 Link("باز کردن Shortcuts", destination: URL(string: "shortcuts://")!)
+                Text("پس از اجرای شورتکات، iOS می‌تواند به نوا برگردد. اگر فرمان را در مکالمهٔ صوتی داده باشی و شروع خودکار میان‌بر روشن باشد، شنیدن ادامه پیدا می‌کند.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("تنظیم دستی صدای رسانه") {
+                NAVASystemVolumeControl().frame(height: 44)
+                Text("این کنترل رسمی iOS بدون شورتکات کار می‌کند؛ فرمان صوتی صدا به راه‌اندازی بالا نیاز دارد.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
         }
         .navigationTitle("کنترل گوشی")
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+private struct NAVASystemVolumeControl: UIViewRepresentable {
+    func makeUIView(context: Context) -> MPVolumeView {
+        let view = MPVolumeView()
+        view.showsRouteButton = false
+        return view
+    }
+    func updateUIView(_ uiView: MPVolumeView, context: Context) {}
 }

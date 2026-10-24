@@ -1,7 +1,6 @@
 import AVFoundation
 import Combine
 import Foundation
-import WhisperKit
 
 /// One microphone owner and one sequential decoder. Audio never leaves the device.
 @MainActor
@@ -17,10 +16,14 @@ final class NAVARealtimeSpeechService: ObservableObject {
     @Published private(set) var level = 0.0
     @Published private(set) var completedTurn: Turn?
     @Published private(set) var errorMessage: String?
+    @Published private(set) var interruptionID: UUID?
+    @Published private(set) var isMonitoringReply = false
 
-    private var processor: AudioProcessor?
+    let audio = NAVAConversationAudio()
     private var window = NAVALiveSpeechWindow()
+    private var interruptionGate = NAVAInterruptionGate()
     private var generation = UUID()
+    private var lastInputAt = Date()
     private var decodeTask: Task<Void, Never>?
     private var interruptionObserver: AnyCancellable?
 
@@ -30,19 +33,20 @@ final class NAVARealtimeSpeechService: ObservableObject {
                 guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                       raw == AVAudioSession.InterruptionType.began.rawValue else { return }
                 Task { @MainActor [weak self] in
-                    guard let self, self.isListening || self.isFinalizing else { return }
+                    guard let self, self.audio.isRunning else { return }
                     self.stop()
                     self.errorMessage = "مکالمه به‌خاطر وقفهٔ صوتی آیفون متوقف شد. برای ادامه میکروفون را بزن."
                 }
             }
     }
 
-    func start(using speech: NAVAOfflineSpeechService, sensitivity: Double) async throws {
+    func start(using speech: NAVAOfflineSpeechService, sensitivity: Double, monitorReply: Bool = false) async throws {
         guard !isListening else { return }
         // Cancellation may still be draining a Core ML inference. Never overlap
         // it with a new turn or let its result modify the new conversation.
         let previous = decodeTask
-        stop()
+        generation = UUID()
+        decodeTask?.cancel()
         let token = generation
         await previous?.value
         guard token == generation, !Task.isCancelled else { throw CancellationError() }
@@ -53,30 +57,20 @@ final class NAVARealtimeSpeechService: ObservableObject {
         guard allowed else { throw NAVAVoiceMemoError.microphoneDenied }
 
         window = NAVALiveSpeechWindow()
+        isFinalizing = false
         partialText = ""
         completedTurn = nil
         errorMessage = nil
-        let input = AudioProcessor()
-        processor = input
+        interruptionGate = NAVAInterruptionGate()
+        interruptionID = nil
+        isMonitoringReply = monitorReply
+        lastInputAt = Date()
         do {
-            try input.startRecordingLive { [weak self, weak input] samples in
-                // This callback runs on the processor's audio queue. Its own
-                // redundant history is not used; retain only the energy window.
-                input?.purgeAudioSamples(keepingLast: 0)
-                if let input, input.audioEnergy.count > 30 {
-                    input.audioEnergy.removeFirst(input.audioEnergy.count - 30)
-                }
-                Task { @MainActor [weak self] in
-                    guard let self, self.generation == token, self.isListening else { return }
-                    self.window.append(samples, sensitivity: sensitivity)
-                    self.level = self.window.level
-                    if self.window.isComplete {
-                        self.isListening = false
-                        self.isFinalizing = true
-                        self.processor?.stopRecording()
-                        self.processor = nil
-                    }
-                }
+            try audio.start { [weak self] samples in
+                self?.receive(samples, sensitivity: sensitivity)
+            } onError: { [weak self] reason in
+                self?.stop()
+                self?.errorMessage = reason
             }
             isListening = true
             decodeTask = Task { @MainActor [weak self] in
@@ -84,20 +78,53 @@ final class NAVARealtimeSpeechService: ObservableObject {
                 await self.decodeLoop(using: speech, token: token)
             }
         } catch {
-            input.stopRecording()
-            processor = nil
+            stop()
             throw error
         }
+    }
+
+    private func receive(_ samples: [Float], sensitivity: Double) {
+        lastInputAt = Date()
+        guard isListening else { return }
+        window.append(samples, sensitivity: isMonitoringReply ? max(0.20, sensitivity) : sensitivity)
+        level = window.level
+        if isMonitoringReply {
+            if interruptionGate.observe(isVoiceActive: window.isVoiceActive, at: window.elapsed) {
+                // Stop output immediately but preserve the beginning of the
+                // user's interruption in the current transcription window.
+                audio.stopPlayback()
+                isMonitoringReply = false
+                interruptionID = UUID()
+            } else if window.isComplete {
+                // Do not execute a segment that never passed interruption
+                // detection: it may be residual speaker echo.
+                window = NAVALiveSpeechWindow()
+                interruptionGate = NAVAInterruptionGate()
+            }
+        }
+        if window.isComplete && !isMonitoringReply {
+            isListening = false
+            isFinalizing = true
+        }
+    }
+
+    func finishReplyMonitoring() {
+        guard isMonitoringReply else { return }
+        isMonitoringReply = false
+        // Keep the prefix if the user began speaking just before playback
+        // finished, before sustained input had time to open the gate.
+        if !window.hasSpeech || !window.isVoiceActive { window = NAVALiveSpeechWindow() }
+        interruptionGate = NAVAInterruptionGate()
     }
 
     func stop() {
         generation = UUID()
         decodeTask?.cancel()
-        processor?.stopRecording()
-        processor = nil
+        audio.stop()
         isListening = false
         isFinalizing = false
         level = 0
+        isMonitoringReply = false
         window = NAVALiveSpeechWindow()
     }
 
@@ -105,9 +132,12 @@ final class NAVARealtimeSpeechService: ObservableObject {
         var lastSampleCount = 0
         while token == generation, !Task.isCancelled {
             do {
+                if !audio.isRunning || (isListening && Date().timeIntervalSince(lastInputAt) > 5) {
+                    throw NAVAConversationAudioError.inputUnavailable
+                }
                 let final = window.isComplete
                 let samples = window.samples
-                if !final && (!window.hasSpeech || samples.count - lastSampleCount < 12_800) {
+                if isMonitoringReply || (!final && (!window.hasSpeech || samples.count - lastSampleCount < 12_800)) {
                     try await Task.sleep(nanoseconds: 100_000_000)
                     continue
                 }
@@ -126,8 +156,7 @@ final class NAVARealtimeSpeechService: ObservableObject {
                 }
             } catch {
                 guard token == generation, !Task.isCancelled else { return }
-                processor?.stopRecording()
-                processor = nil
+                audio.stop()
                 isListening = false
                 isFinalizing = false
                 level = 0

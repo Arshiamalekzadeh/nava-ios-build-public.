@@ -11,6 +11,7 @@ struct NAVALiveSpeechWindow {
     private var detector = NAVAVoiceActivityDetector()
 
     var hasSpeech: Bool { detector.heardSpeech }
+    var isVoiceActive: Bool { detector.isVoiceActive }
 
     mutating func append(_ buffer: [Float], sensitivity: Double) {
         guard !isComplete, !buffer.isEmpty else { return }

@@ -28,6 +28,7 @@ struct VoiceView: View {
     @StateObject private var liveSpeech = NAVARealtimeSpeechService()
     @State private var mode: NAVAVoiceMode = .recognize
     @State private var isHandling = false
+    @State private var responseTask: Task<Void, Never>?
     @State private var isStartingCapture = false
     @State private var lastExecuted = ""
     @State private var feedback = ""
@@ -47,13 +48,13 @@ struct VoiceView: View {
     private var isCapturing: Bool { memos.isRecording || liveSpeech.isListening }
     private var inputLevel: CGFloat { memos.isRecording ? memos.level : CGFloat(liveSpeech.level) }
     private var statusText: String {
+        if persianTTS.isPlaying { return "نوا داره صحبت می‌کنه؛ می‌تونی حرفش رو قطع کنی" }
+        if persianTTS.isSynthesizing { return "نوا در حال ساخت صدای فارسی است…" }
+        if isHandling { return responsePhase.isEmpty ? "نوا در حال پاسخ است…" : responsePhase }
         if liveSpeech.isListening { return "دارم زنده گوش می‌دم… صحبت کن" }
         if liveSpeech.isFinalizing { return "دارم جمله‌ات رو کامل می‌کنم…" }
         if memos.isRecording { return continuousSession ? "دارم گوش می‌دم… صحبت کن" : "در حال ضبط صدای تو" }
         if offlineSpeech.isPreparing || offlineSpeech.isTranscribing { return offlineSpeech.phase }
-        if persianTTS.isSynthesizing { return "نوا در حال ساخت صدای فارسی است…" }
-        if persianTTS.isPlaying { return "نوا داره صحبت می‌کنه…" }
-        if isHandling { return responsePhase.isEmpty ? "نوا در حال پاسخ است…" : responsePhase }
         return "نوا آماده است"
     }
 
@@ -189,6 +190,7 @@ struct VoiceView: View {
                 return
             }
             focus.stopSound()
+            if let result = voiceRouter.lastDeviceControlResult { feedback = result }
             await activity.start(status: "آماده گفتگو", phase: .ready)
             await activity.updateStatus("آماده گفتگو", phase: .ready)
             if voiceRouter.consumeAutoListen() {
@@ -207,7 +209,11 @@ struct VoiceView: View {
         }
         .onChange(of: liveSpeech.completedTurn?.id) { _, _ in
             guard let turn = liveSpeech.completedTurn, continuousSession, !isDismissing else { return }
-            Task { await handleLiveTurn(turn.text) }
+            beginLiveTurn(turn.text)
+        }
+        .onChange(of: liveSpeech.interruptionID) { _, token in
+            guard token != nil, continuousSession, !isDismissing else { return }
+            interruptReply()
         }
         .onChange(of: liveSpeech.errorMessage) { _, error in
             guard let error, continuousSession, !isDismissing else { return }
@@ -218,10 +224,19 @@ struct VoiceView: View {
             if phase == .background {
                 stopContinuousSession()
                 persianTTS.stop()
+            } else if phase == .active, shortcutAutoListen, voiceRouter.consumeAutoListen() {
+                Task { await launchVoiceFromShortcut() }
             }
+        }
+        .onChange(of: voiceRouter.lastDeviceControlResult) { _, result in
+            if let result { feedback = result }
         }
         .onChange(of: persianTTS.isPlaying) { _, playing in
             if !playing {
+                liveSpeech.finishReplyMonitoring()
+                if continuousSession, liveSpeech.isListening, !isHandling, !isDismissing {
+                    Task { await activity.updateStatus("دارم گوش می‌دم", phase: .listening) }
+                }
                 if waitingForAudioToFinish {
                     waitingForAudioToFinish = false
                     Task { await resumeHandsFreeListening() }
@@ -231,7 +246,7 @@ struct VoiceView: View {
             }
         }
         .onChange(of: voiceRouter.autoListenRequested) { _, requested in
-            if requested, shortcutAutoListen, voiceRouter.consumeAutoListen() {
+            if requested, shortcutAutoListen, scenePhase == .active, voiceRouter.consumeAutoListen() {
                 mode = .recognize
                 Task { await launchVoiceFromShortcut() }
             }
@@ -350,8 +365,9 @@ struct VoiceView: View {
                         Circle()
                             .fill(liveSpeech.isListening ? NAVATheme.orange : NAVATheme.sand)
                             .frame(width: 8, height: 8)
-                        Text(liveSpeech.isListening ? "متن زنده است؛ با مکث خودم پاسخ می‌دم" :
-                            (persianTTS.isPlaying ? "بعد از جواب دوباره گوش می‌دم" : "دارم جوابت رو آماده می‌کنم"))
+                        Text(persianTTS.isPlaying ? "حرف بزن؛ نوا پاسخ را قطع می‌کند و گوش می‌دهد" :
+                            liveSpeech.isListening ? "متن زنده است؛ با مکث خودم پاسخ می‌دم" :
+                            "دارم جوابت رو آماده می‌کنم")
                             .font(NAVATheme.type(12))
                             .foregroundStyle(NAVATheme.sand)
                         Spacer(minLength: 0)
@@ -517,28 +533,54 @@ struct VoiceView: View {
 
     private func stopContinuousSession() {
         conversationRevision += 1
+        responseTask?.cancel()
+        responseTask = nil
+        isHandling = false
         continuousSession = false
         waitingForAudioToFinish = false
+        persianTTS.stop()
         liveSpeech.stop()
     }
 
-    private func handleLiveTurn(_ text: String) async {
-        guard continuousSession, !isDismissing, !isHandling else { return }
+    private func interruptReply() {
+        conversationRevision += 1
+        responseTask?.cancel()
+        responseTask = nil
+        isHandling = false
+        responsePhase = ""
+        waitingForAudioToFinish = false
+        persianTTS.stop()
+        let revision = conversationRevision
+        Task {
+            guard revision == conversationRevision, continuousSession, !isDismissing else { return }
+            await activity.updateStatus("دارم گوش می‌دم", phase: .listening)
+        }
+    }
+
+    private func beginLiveTurn(_ text: String) {
+        guard continuousSession, !isDismissing else { return }
+        if isHandling || persianTTS.isPlaying || persianTTS.isSynthesizing {
+            interruptReply()
+        }
         guard !text.isEmpty else {
             // A rejected/noisy segment is not a command and does not require
             // pressing send or restarting the microphone.
-            await resumeHandsFreeListening()
+            Task { await resumeHandsFreeListening() }
             return
         }
         let revision = conversationRevision
         isHandling = true
-        await processText(text, expectedRevision: revision)
-        isHandling = false
-        guard revision == conversationRevision, continuousSession, !isDismissing else { return }
-        if persianTTS.isPlaying {
-            waitingForAudioToFinish = true
-        } else {
-            await resumeHandsFreeListening()
+        responseTask = Task {
+            await processText(text, expectedRevision: revision)
+            guard !Task.isCancelled, revision == conversationRevision, continuousSession, !isDismissing else { return }
+            isHandling = false
+            responseTask = nil
+            if persianTTS.isPlaying {
+                waitingForAudioToFinish = true
+            } else {
+                liveSpeech.finishReplyMonitoring()
+                await resumeHandsFreeListening()
+            }
         }
     }
 
@@ -566,8 +608,10 @@ struct VoiceView: View {
         lastHeardText = text
         Task {
             defer {
-                isHandling = false
-                responsePhase = ""
+                if revision == conversationRevision {
+                    isHandling = false
+                    responsePhase = ""
+                }
             }
             await processText(text, expectedRevision: revision)
         }
@@ -579,12 +623,24 @@ struct VoiceView: View {
         responsePhase = "در حال بررسی فرمان…"
         await activity.updateStatus("در حال پاسخ")
         if let expectedRevision, expectedRevision != conversationRevision { return }
+        if continuousSession {
+            do {
+                try await liveSpeech.start(using: offlineSpeech, sensitivity: voiceSensitivity, monitorReply: true)
+            } catch {
+                guard !Task.isCancelled else { return }
+                conversationalError = error.localizedDescription
+                stopContinuousSession()
+                return
+            }
+        }
+        if Task.isCancelled { return }
+        if let expectedRevision, expectedRevision != conversationRevision { return }
         let response: String
         if case .unknown = NAVACommandParser.parse(text), chatGPT.canUsePlan {
             responsePhase = "در حال دریافت پاسخ هوشمند…"
             response = await chat.sendAI(text, auth: chatGPT)
         } else {
-            response = await chat.send(text, store: store)
+            response = await chat.send(text, store: store, resumeVoiceAfterShortcut: continuousSession)
         }
         if let expectedRevision, expectedRevision != conversationRevision { return }
         feedback = "نوا: \(response)"
@@ -593,7 +649,9 @@ struct VoiceView: View {
             await activity.updateStatus("در حال پاسخ", phase: .responding)
             if let expectedRevision, expectedRevision != conversationRevision { return }
             // Fully offline Piper + sherpa-onnx audio, NOT Apple's missing fa-IR TTS.
-            let played = await persianTTS.speak(response)
+            let played = await persianTTS.speak(response, through: continuousSession ? liveSpeech.audio : nil)
+            if Task.isCancelled { return }
+            if let expectedRevision, expectedRevision != conversationRevision { return }
             if !played, let error = persianTTS.errorMessage {
                 feedback += "\n\n\(error)"
             }
@@ -601,6 +659,8 @@ struct VoiceView: View {
         responsePhase = ""
         if persianTTS.isPlaying {
             await activity.updateStatus("در حال پاسخ", phase: .responding)
+        } else if continuousSession && liveSpeech.isListening {
+            await activity.updateStatus("دارم گوش می‌دم", phase: .listening)
         } else {
             await activity.updateStatus("آماده گفتگو", phase: .ready)
         }
